@@ -1,0 +1,6 @@
+# Functions live at the default location, netlify/functions.
+# No publish key: the site files sit at the repo root, and keeping the
+# functions folder outside the publish dir is what lets Netlify bundle them.
+
+[build]
+  functions = "netlify/functions"

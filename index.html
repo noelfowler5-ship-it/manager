@@ -1,0 +1,828 @@
+<title>Personal CFO</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<link rel="manifest" href="./manifest.json">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#111a2e; --panel2:#0f1830; --border:#22314f;
+    --text:#e7ecf7; --muted:#93a1c0; --accent:#5b8def; --accent2:#22c55e;
+    --warn:#f59e0b; --bad:#ef4444; --good:#22c55e;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  body{padding-bottom:76px}
+  .hidden{display:none !important}
+  header{position:sticky;top:0;z-index:5;background:rgba(11,18,32,.92);backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--border);padding:14px 16px 10px}
+  header h1{margin:0;font-size:18px;font-weight:700;letter-spacing:.2px}
+  header p{margin:2px 0 0;color:var(--muted);font-size:12.5px}
+  main{max-width:640px;margin:0 auto;padding:14px 14px 24px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+    padding:14px;margin-bottom:12px}
+  .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+  .stat{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+    padding:10px 8px;text-align:center}
+  .stat .v{font-size:16px;font-weight:700}
+  .stat .l{font-size:11px;color:var(--muted);margin-top:2px}
+  .stat.bad .v{color:var(--bad)} .stat.good .v{color:var(--good)}
+  textarea{width:100%;min-height:78px;background:var(--panel2);color:var(--text);
+    border:1px solid var(--border);border-radius:10px;padding:10px;font-size:15px;resize:vertical}
+  textarea:focus,input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
+  button{font:inherit;cursor:pointer}
+  .btn{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:10px 16px;
+    font-weight:600}
+  .btn.secondary{background:transparent;border:1px solid var(--border);color:var(--text)}
+  .btn.small{padding:6px 10px;font-size:13px;border-radius:8px}
+  .btn.block{width:100%}
+  .row{display:flex;gap:8px}
+  .row.wrap{flex-wrap:wrap}
+  .muted{color:var(--muted)}
+  .pending-item{border:1px solid var(--border);border-radius:10px;padding:10px;margin-top:8px;
+    background:var(--panel2)}
+  .pending-item .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .pending-item .amt{font-weight:700;font-size:16px}
+  .pending-item .raw{color:var(--muted);font-size:12.5px;margin-top:2px}
+  .pending-item select,.pending-item input{width:100%;background:var(--bg);color:var(--text);
+    border:1px solid var(--border);border-radius:8px;padding:6px 8px;margin-top:6px;font-size:13.5px}
+  .badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:6px;
+    margin-left:6px;vertical-align:middle}
+  .badge.review{background:rgba(245,158,11,.18);color:var(--warn)}
+  .badge.income{background:rgba(34,197,94,.18);color:var(--good)}
+  .badge.expense{background:rgba(239,68,68,.14);color:#f87171}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--border)}
+  th{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .status-ok{color:var(--good)} .status-over{color:var(--bad);font-weight:700}
+  .group-head td{background:var(--panel2);font-weight:700;color:var(--muted)}
+  nav.tabbar{position:fixed;bottom:0;left:0;right:0;background:var(--panel);
+    border-top:1px solid var(--border);display:flex;z-index:5}
+  nav.tabbar button{flex:1;background:none;border:none;color:var(--muted);padding:10px 4px 8px;
+    font-size:11px;display:flex;flex-direction:column;align-items:center;gap:2px}
+  nav.tabbar button .ic{font-size:18px}
+  nav.tabbar button.active{color:var(--accent)}
+  .empty{color:var(--muted);text-align:center;padding:22px 10px;font-size:14px}
+  .section-title{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.03em;margin:2px 0 8px}
+  .log-item{display:flex;justify-content:space-between;gap:10px;padding:8px 0;
+    border-bottom:1px solid var(--border)}
+  .log-item:last-child{border-bottom:none}
+  .log-item .cat{font-weight:600}
+  .log-item .meta{color:var(--muted);font-size:12px}
+  .log-item .amt{font-weight:700;white-space:nowrap}
+  .log-item .amt.income{color:var(--good)}
+  .toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);background:#1c2a4a;
+    border:1px solid var(--border);padding:9px 16px;border-radius:20px;font-size:13px;
+    box-shadow:0 6px 20px rgba(0,0,0,.4);z-index:20;opacity:0;pointer-events:none;
+    transition:opacity .2s}
+  .toast.show{opacity:1}
+  .budget-row input{width:90px;text-align:right}
+  details.note summary{cursor:pointer;color:var(--muted);font-size:12.5px}
+</style>
+
+<header>
+  <h1>💰 Personal CFO</h1>
+  <p>Type what happened with your money. Everything else is automatic.</p>
+</header>
+
+<main>
+
+  <!-- CAPTURE TAB -->
+  <section id="view-capture">
+    <div class="stat-row" id="dash-stats"></div>
+
+    <div class="card">
+      <div class="section-title">Add transaction(s)</div>
+      <textarea id="capture-input" placeholder="dinner rm10, telur rm12, apple rm12.50&#10;received salary 1900&#10;reload boost 50"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="btn block" data-action="parse-input">Parse</button>
+      </div>
+      <div id="pending-list"></div>
+      <div id="pending-actions" class="row hidden" style="margin-top:10px">
+        <button class="btn secondary" data-action="cancel-pending">Cancel</button>
+        <button class="btn block" data-action="save-pending">Save all</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Today</div>
+      <div id="today-log"></div>
+    </div>
+  </section>
+
+  <!-- LOG TAB -->
+  <section id="view-log" class="hidden">
+    <div class="card">
+      <div class="row wrap" style="justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div class="section-title" style="margin:0">Transaction log</div>
+        <button class="btn small secondary" data-action="export-csv">Export CSV</button>
+      </div>
+      <div id="full-log"></div>
+    </div>
+  </section>
+
+  <!-- BUDGET TAB -->
+  <section id="view-budget" class="hidden">
+    <div class="card">
+      <div class="section-title">Monthly budget plan</div>
+      <p class="muted" style="margin-top:-4px;font-size:12.5px">
+        Seeded from your real Google Sheet. Edit any target — it's saved on this device.
+      </p>
+      <div id="budget-editor"></div>
+    </div>
+  </section>
+
+  <!-- DASHBOARD TAB -->
+  <section id="view-dashboard" class="hidden">
+    <div class="card">
+      <div class="section-title" id="dashboard-month-title">This month</div>
+      <div id="dashboard-summary"></div>
+    </div>
+    <div class="card">
+      <div class="section-title">Category breakdown — planned vs actual</div>
+      <div id="dashboard-breakdown"></div>
+    </div>
+  </section>
+
+  <!-- SYNC TAB -->
+  <section id="view-sync" class="hidden">
+    <div class="card">
+      <div class="section-title">Google Sheets sync</div>
+      <p class="muted" style="margin-top:-4px;font-size:12.5px">
+        Pushes new entries into your Transaction Log tab, without touching its
+        existing formulas. Nothing leaves your device except this sync call —
+        you're signing in to your own Google account, not ours.
+      </p>
+      <div id="sync-status"></div>
+      <div style="margin-top:10px">
+        <div class="section-title" style="font-size:11px">Spreadsheet ID</div>
+        <input type="text" id="sync-sheet-id" placeholder="the long ID from the sheet's URL"
+          data-action="edit-sheet-id" style="width:100%;background:var(--panel2);color:var(--text);
+          border:1px solid var(--border);border-radius:8px;padding:8px;font-size:13px">
+        <p class="muted" style="font-size:11.5px;margin:4px 0 0">
+          From the sheet's URL: docs.google.com/spreadsheets/d/<b>THIS PART</b>/edit
+        </p>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn secondary" data-action="google-signin" id="btn-google-signin">Connect Google</button>
+        <button class="btn block" data-action="sync-now" id="btn-sync-now" disabled>Sync now</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<nav class="tabbar">
+  <button data-action="switch-tab" data-tab="capture" class="active"><span class="ic">✍️</span>Capture</button>
+  <button data-action="switch-tab" data-tab="log"><span class="ic">📒</span>Log</button>
+  <button data-action="switch-tab" data-tab="budget"><span class="ic">🎯</span>Budget</button>
+  <button data-action="switch-tab" data-tab="dashboard"><span class="ic">📊</span>Dashboard</button>
+  <button data-action="switch-tab" data-tab="sync"><span class="ic">🔄</span>Sync</button>
+</nav>
+
+<div id="toast" class="toast"></div>
+
+<script>
+/* =========================================================================
+   Personal CFO — Phase 1 capture MVP
+   Category / Group / Type taxonomy and default budget targets are copied
+   verbatim from the user's real "Monthly Budget Plan" Google Sheet
+   (Reference Lists + Monthly Budget Plan tabs) so this app's categorization
+   matches the spreadsheet exactly. Phase 2 adds a Google Sheets sync using
+   this same taxonomy as the join key.
+   ========================================================================= */
+
+/* ---------- helpers ---------- */
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const fmtRM = (n) => 'RM' + (Math.round((n + Number.EPSILON) * 100) / 100)
+  .toLocaleString('en-MY', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const monthKey = (isoDate) => isoDate.slice(0, 7); // YYYY-MM
+const uid = () => 'tx_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+/* ---------- category taxonomy (verbatim from the real sheet) ---------- */
+// type: 'Income' | 'Expense'  |  group: Income / Fixed / Savings / Family / Lifestyle / Optional / Other
+const CATEGORIES = [
+  { name: "Full-time salary (net)",        type: "Income",  group: "Income",    budget: 1942.95 },
+  { name: "Part-time / gig income",        type: "Income",  group: "Income",    budget: 0 },
+  { name: "Sewa rumah (own rent)",         type: "Expense", group: "Fixed",     budget: 250 },
+  { name: "Girlfriend's rent help",        type: "Expense", group: "Fixed",     budget: 0 },
+  { name: "Petrol",                        type: "Expense", group: "Fixed",     budget: 150 },
+  { name: "Reload (Boost eWallet)",        type: "Expense", group: "Fixed",     budget: 100 },
+  { name: "Utility",                       type: "Expense", group: "Fixed",     budget: 20 },
+  { name: "Food (daily)",                  type: "Expense", group: "Fixed",     budget: 300 },
+  { name: "Car sinking fund",              type: "Expense", group: "Savings",   budget: 120 },
+  { name: "Emergency Fund Tier 1",         type: "Expense", group: "Savings",   budget: 150 },
+  { name: "Emergency Fund Tier 2 (ASB)",   type: "Expense", group: "Savings",   budget: 350 },
+  { name: "Gold savings for Mom",          type: "Expense", group: "Family",    budget: 0 },
+  { name: "Sunday treat",                  type: "Expense", group: "Lifestyle", budget: 100 },
+  { name: "Dobi (laundry)",                type: "Expense", group: "Lifestyle", budget: 44 },
+  { name: "Post-jog drinks",               type: "Expense", group: "Lifestyle", budget: 91 },
+  { name: "PTPTN voluntary payment",       type: "Expense", group: "Optional",  budget: 0 },
+  { name: "Other food",                    type: "Expense", group: "Lifestyle", budget: 0 },
+  { name: "Other / Miscellaneous",         type: "Expense", group: "Other",     budget: 0 },
+];
+const CATEGORY_NAMES = CATEGORIES.map(c => c.name);
+const catInfo = (name) => CATEGORIES.find(c => c.name === name) || CATEGORIES[CATEGORIES.length - 1];
+
+// Keyword -> category guesses. English + Malay, checked in order (first match wins).
+const KEYWORD_MAP = [
+  [/\b(salary|gaji|payroll)\b/i, "Full-time salary (net)"],
+  [/\b(freelance|gig|part\s*time|part-time)\b/i, "Part-time / gig income"],
+  [/\b(rent|sewa)\b/i, "Sewa rumah (own rent)"],
+  [/\b(girlfriend|gf)\b.*\brent\b/i, "Girlfriend's rent help"],
+  [/\b(petrol|minyak|fuel|ron95|ron97)\b/i, "Petrol"],
+  [/\b(boost|reload|top ?up|e-?wallet|ewallet|shopeepay|tng)\b/i, "Reload (Boost eWallet)"],
+  [/\b(utility|utilities|bill|tnb|water bill|electric)\b/i, "Utility"],
+  [/\b(car sinking|car fund)\b/i, "Car sinking fund"],
+  [/\b(emergency fund tier 1|ef ?1|ef tier 1)\b/i, "Emergency Fund Tier 1"],
+  [/\b(asb|emergency fund tier 2|ef ?2|ef tier 2)\b/i, "Emergency Fund Tier 2 (ASB)"],
+  [/\b(gold)\b/i, "Gold savings for Mom"],
+  [/\bsunday treat\b/i, "Sunday treat"],
+  [/\b(dobi|laundry)\b/i, "Dobi (laundry)"],
+  [/\b(jog|run|lari|post-?jog|post workout)\b/i, "Post-jog drinks"],
+  [/\bptptn\b/i, "PTPTN voluntary payment"],
+  [/\b(dinner|lunch|breakfast|makan|food|beli|groceries|nasi|roti|ayam|telur|apple|bakso|kangkung|bawang|pisang|aiskrim|mineral|buntut|drinks?|tea|coffee|americano)\b/i, "Food (daily)"],
+];
+
+// Income-signal words used only when nothing else matched, so we don't file
+// a stray gift/refund under an Expense category by default.
+const INCOME_HINT = /\b(received|receive|gave me|gift|refund|bonus|dividend|income)\b/i;
+
+// Words too generic to teach the categorizer anything (would overwrite good
+// learned mappings with noise from unrelated transactions).
+const LEARN_STOPWORDS = new Set([
+  'the','and','for','with','from','this','that','done','paid','rm','a','an',
+  'me','my','to','of','on','in','at','is','it','was','ni','tu','yang','dan'
+]);
+
+/* ---------- Google Sheets sync config ---------- */
+// Public by design — an OAuth Client ID is meant to be embedded in client-side
+// code (unlike a client *secret*, which this app never uses or needs).
+const GOOGLE_CLIENT_ID = '821978082875-10t6b32mn6hi9l6nii0romc71vcn0a0t.apps.googleusercontent.com';
+const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
+const SHEET_TAB = 'Transactions';
+
+/* ---------- storage layer ---------- */
+const LS_TX = 'pcfo_transactions_v1';
+const LS_BUDGETS = 'pcfo_budgets_v1';
+const LS_LEARNED = 'pcfo_learned_v1';
+const LS_SHEET_ID = 'pcfo_sheet_id_v1';
+const LS_SYNCED_IDS = 'pcfo_synced_ids_v1';
+
+function safeGet(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch (e) { return fallback; }
+}
+function safeSet(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+  catch (e) { toast('Storage full or unavailable — export your data soon.'); return false; }
+}
+
+function loadTransactions() { return safeGet(LS_TX, []); }
+function saveTransactions(list) { return safeSet(LS_TX, list); }
+
+function loadLearned() { return safeGet(LS_LEARNED, {}); }
+function saveLearned(map) { return safeSet(LS_LEARNED, map); }
+
+// Splits text into lowercase word tokens worth learning from.
+function learnableWords(text) {
+  return (text || '').toLowerCase().match(/[a-z][a-z']{2,}/g) || [];
+}
+
+// Records that this text's words point to `category`, so future entries
+// with the same word are recognized even if they don't hit the static
+// keyword table. Called when the user corrects/confirms a category.
+function learnFromCorrection(rawText, category, learned) {
+  learnableWords(rawText).forEach(w => {
+    if (!LEARN_STOPWORDS.has(w)) learned[w] = category;
+  });
+  return learned;
+}
+
+// Sync has been verified against the dev-copy sheet, so this now defaults
+// to the real Monthly Budget Plan spreadsheet.
+const REAL_SHEET_ID = '1JR4CjH-KyZfyc5ZLTlWNE5SP6cl70P6rxnDzmDQzGa4';
+function loadSheetId() { return safeGet(LS_SHEET_ID, REAL_SHEET_ID); }
+function saveSheetId(id) { return safeSet(LS_SHEET_ID, id); }
+function loadSyncedIds() { return safeGet(LS_SYNCED_IDS, []); }
+function saveSyncedIds(list) { return safeSet(LS_SYNCED_IDS, list); }
+
+function loadBudgets() {
+  const stored = safeGet(LS_BUDGETS, {});
+  const merged = {};
+  CATEGORIES.forEach(c => { merged[c.name] = (c.name in stored) ? stored[c.name] : c.budget; });
+  return merged;
+}
+function saveBudgets(map) { return safeSet(LS_BUDGETS, map); }
+
+/* ---------- domain logic (pure) ---------- */
+
+// `learned` is an optional {word: category} map built from past corrections
+// (see learnFromCorrection). Checked before the static keyword table so a
+// merchant/item the user has corrected before is recognized next time.
+function guessCategory(text, learned) {
+  if (learned) {
+    for (const w of learnableWords(text)) {
+      if (learned[w]) return { category: learned[w], confidence: 0.9 };
+    }
+  }
+  for (const [re, cat] of KEYWORD_MAP) if (re.test(text)) return { category: cat, confidence: 0.85 };
+  if (INCOME_HINT.test(text)) return { category: "Part-time / gig income", confidence: 0.35 };
+  return { category: "Other / Miscellaneous", confidence: 0.3 };
+}
+
+// Flags candidates that look like a repeat of something already logged
+// today (same date + category + amount) so the confirmation card can warn
+// before saving, rather than silently double-counting or silently dropping.
+function flagDuplicates(pending, transactions, today) {
+  const todaysKeys = new Set(
+    transactions.filter(t => t.date === today).map(t => `${t.category}|${t.amount}`)
+  );
+  pending.forEach(p => {
+    p.duplicate = p.amount != null && todaysKeys.has(`${p.category}|${p.amount}`);
+  });
+  return pending;
+}
+
+/* ---------- Sheets sync logic (pure — the parts that don't need `fetch`) ---------- */
+
+// Matches the sheet's existing "06 Aug 2026" text format so Sheets parses it
+// as the same date type already used in the column, not a different locale.
+function fmtSheetDate(isoDate) {
+  const d = new Date(isoDate + 'T00:00:00');
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = d.toLocaleDateString('en-US', { month: 'short' });
+  return `${day} ${month} ${d.getFullYear()}`;
+}
+
+// `columnValues` is the Transactions sheet's column A as returned by the
+// Sheets API (an array of single-cell arrays, header row included). Returns
+// the first row number (1-indexed, sheet rows) that's blank — that's where
+// the pre-formatted formulas in the other columns are waiting for data, per
+// the sheet's own "~300 pre-formatted rows" design.
+function findFirstEmptyRow(columnValues) {
+  for (let i = 1; i < columnValues.length; i++) { // skip header at index 0
+    const cell = columnValues[i] && columnValues[i][0];
+    if (!cell || !String(cell).trim()) return i + 1; // sheet rows are 1-indexed
+  }
+  return columnValues.length + 1;
+}
+
+// Builds one write per transaction: only columns A (Date), B (Category),
+// D (Amount), E (Notes) — never touching C (Type) or F (Month), which are
+// the sheet's own pre-filled formulas for that row.
+function buildSyncWrites(transactions, startRow) {
+  return transactions.map((t, i) => {
+    const row = startRow + i;
+    return {
+      transactionId: t.id,
+      row,
+      ab: { range: `${SHEET_TAB}!A${row}:B${row}`, values: [[fmtSheetDate(t.date), t.category]] },
+      de: { range: `${SHEET_TAB}!D${row}:E${row}`, values: [[t.amount, t.note || '']] },
+    };
+  });
+}
+
+// Pull the amount out of a segment. Prefers an RM-prefixed number; falls
+// back to the first bare number found. Returns { amount, rest } or null.
+function extractAmount(segment) {
+  let m = segment.match(/rm\s*([\d,]+(?:\.\d{1,2})?)/i);
+  if (m) {
+    const amount = parseFloat(m[1].replace(/,/g, ''));
+    const rest = (segment.slice(0, m.index) + ' ' + segment.slice(m.index + m[0].length)).trim();
+    return { amount, rest };
+  }
+  m = segment.match(/\b(\d+(?:\.\d{1,2})?)\b/);
+  if (m) {
+    const amount = parseFloat(m[1]);
+    const rest = (segment.slice(0, m.index) + ' ' + segment.slice(m.index + m[0].length)).trim();
+    return { amount, rest };
+  }
+  return null;
+}
+
+// Splits free text into one or more raw transaction segments.
+function splitSegments(text) {
+  return text.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
+}
+
+// Turns one raw segment into a candidate transaction (not yet saved).
+// `learned` is the optional per-word category map from past corrections.
+function parseSegment(segment, learned) {
+  const extracted = extractAmount(segment);
+  if (!extracted || !(extracted.amount > 0)) {
+    return { rawText: segment, amount: null, note: segment, category: "Other / Miscellaneous",
+             type: "Expense", confidence: 0, error: 'No amount found' };
+  }
+  const note = extracted.rest.replace(/\s+/g, ' ').replace(/^(for|on|to)\s+/i, '').trim();
+  const { category, confidence } = guessCategory(segment, learned);
+  const type = catInfo(category).type;
+  return { rawText: segment, amount: extracted.amount, note: note || segment,
+           category, type, confidence, error: null };
+}
+
+function parseInput(text, learned) {
+  return splitSegments(text).map(s => parseSegment(s, learned));
+}
+
+function monthlyTotals(transactions, ymKey) {
+  let income = 0, expense = 0;
+  const byCategory = {};
+  transactions.forEach(t => {
+    if (monthKey(t.date) !== ymKey) return;
+    if (t.type === 'Income') income += t.amount; else expense += t.amount;
+    byCategory[t.category] = (byCategory[t.category] || 0) + t.amount;
+  });
+  return { income, expense, byCategory };
+}
+
+function lifetimeCash(transactions) {
+  return transactions.reduce((sum, t) => sum + (t.type === 'Income' ? t.amount : -t.amount), 0);
+}
+
+/* ---------- app state ---------- */
+const state = {
+  tab: 'capture',
+  transactions: loadTransactions(),
+  budgets: loadBudgets(),
+  learned: loadLearned(),
+  pending: [],
+  sheetId: loadSheetId(),
+  syncedIds: new Set(loadSyncedIds()),
+  accessToken: null,   // kept in memory only — never persisted
+  syncing: false,
+  lastSyncMsg: '',
+};
+
+/* ---------- render ---------- */
+function render() {
+  ['capture', 'log', 'budget', 'dashboard', 'sync'].forEach(t => {
+    document.getElementById('view-' + t).classList.toggle('hidden', state.tab !== t);
+  });
+  document.querySelectorAll('nav.tabbar button').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === state.tab);
+  });
+
+  if (state.tab === 'capture') { renderDashStats(); renderPending(); renderTodayLog(); }
+  if (state.tab === 'log') renderFullLog();
+  if (state.tab === 'budget') renderBudgetEditor();
+  if (state.tab === 'dashboard') renderDashboardTab();
+  if (state.tab === 'sync') renderSyncTab();
+}
+
+function renderDashStats() {
+  const ym = monthKey(todayISO());
+  const { income, expense, byCategory } = monthlyTotals(state.transactions, ym);
+  const cash = lifetimeCash(state.transactions);
+  const totalExpenseBudget = CATEGORIES.filter(c => c.type === 'Expense')
+    .reduce((s, c) => s + (state.budgets[c.name] || 0), 0);
+  const remaining = totalExpenseBudget - expense;
+
+  document.getElementById('dash-stats').innerHTML = `
+    <div class="stat ${cash < 0 ? 'bad' : ''}"><div class="v">${esc(fmtRM(cash))}</div><div class="l">Current cash</div></div>
+    <div class="stat"><div class="v">${esc(fmtRM(expense))}</div><div class="l">Monthly spending</div></div>
+    <div class="stat ${remaining < 0 ? 'bad' : 'good'}"><div class="v">${esc(fmtRM(remaining))}</div><div class="l">Budget remaining</div></div>
+  `;
+}
+
+function pendingItemHTML(p, i) {
+  const opts = CATEGORY_NAMES.map(n =>
+    `<option value="${esc(n)}" ${n === p.category ? 'selected' : ''}>${esc(n)}</option>`).join('');
+  const info = catInfo(p.category);
+  const typeBadge = `<span class="badge ${info.type === 'Income' ? 'income' : 'expense'}">${info.type}</span>`;
+  const reviewBadge = p.confidence < 0.5 ? `<span class="badge review">check category</span>` : '';
+  const dupBadge = p.duplicate ? `<span class="badge review">possible duplicate</span>` : '';
+  const errorLine = p.error ? `<div class="raw" style="color:var(--bad)">⚠ ${esc(p.error)} — edit amount below</div>` : '';
+  return `
+    <div class="pending-item" data-pending-index="${i}">
+      <div class="top">
+        <div class="amt">${p.amount != null ? esc(fmtRM(p.amount)) : '—'}</div>
+        <div>${typeBadge}${reviewBadge}${dupBadge}</div>
+      </div>
+      <div class="raw">"${esc(p.rawText)}"</div>
+      ${errorLine}
+      <input type="number" step="0.01" min="0" placeholder="Amount (RM)"
+        value="${p.amount != null ? p.amount : ''}" data-action="edit-pending-amount" data-index="${i}">
+      <select data-action="edit-pending-category" data-index="${i}">${opts}</select>
+      <input type="text" placeholder="Note" value="${esc(p.note)}"
+        data-action="edit-pending-note" data-index="${i}">
+      <button class="btn secondary small" style="margin-top:6px" data-action="remove-pending" data-index="${i}">Remove this line</button>
+    </div>`;
+}
+
+function renderPending() {
+  const list = document.getElementById('pending-list');
+  const actions = document.getElementById('pending-actions');
+  if (!state.pending.length) { list.innerHTML = ''; actions.classList.add('hidden'); return; }
+  list.innerHTML = state.pending.map(pendingItemHTML).join('');
+  actions.classList.remove('hidden');
+}
+
+function logItemHTML(t) {
+  const info = catInfo(t.category);
+  const sign = t.type === 'Income' ? '+' : '−';
+  return `
+    <div class="log-item">
+      <div>
+        <div class="cat">${esc(t.category)}</div>
+        <div class="meta">${esc(t.date)}${t.note ? ' · ' + esc(t.note) : ''} · ${esc(info.group)}</div>
+      </div>
+      <div class="amt ${t.type === 'Income' ? 'income' : ''}">${sign}${esc(fmtRM(t.amount))}</div>
+    </div>`;
+}
+
+function renderTodayLog() {
+  const today = todayISO();
+  const todays = state.transactions.filter(t => t.date === today).sort((a, b) => b.createdAt - a.createdAt);
+  const el = document.getElementById('today-log');
+  el.innerHTML = todays.length
+    ? todays.map(logItemHTML).join('')
+    : `<div class="empty">Nothing logged today yet.</div>`;
+}
+
+function renderFullLog() {
+  const sorted = [...state.transactions].sort((a, b) => b.createdAt - a.createdAt);
+  const el = document.getElementById('full-log');
+  el.innerHTML = sorted.length
+    ? sorted.map(logItemHTML).join('')
+    : `<div class="empty">No transactions yet. Add one on the Capture tab.</div>`;
+}
+
+function renderBudgetEditor() {
+  const groups = ['Income', 'Fixed', 'Savings', 'Family', 'Lifestyle', 'Optional', 'Other'];
+  let html = '';
+  groups.forEach(g => {
+    const cats = CATEGORIES.filter(c => c.group === g);
+    if (!cats.length) return;
+    html += `<div class="section-title" style="margin-top:14px">${esc(g)}</div>`;
+    cats.forEach(c => {
+      html += `
+        <div class="row budget-row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div>${esc(c.name)}</div>
+          <input type="number" step="0.01" min="0" value="${state.budgets[c.name]}"
+            data-action="edit-budget" data-category="${esc(c.name)}">
+        </div>`;
+    });
+  });
+  document.getElementById('budget-editor').innerHTML = html;
+}
+
+function renderDashboardTab() {
+  const ym = monthKey(todayISO());
+  const { income, expense, byCategory } = monthlyTotals(state.transactions, ym);
+  const plannedIncome = CATEGORIES.filter(c => c.type === 'Income').reduce((s, c) => s + (state.budgets[c.name] || 0), 0);
+  const plannedExpense = CATEGORIES.filter(c => c.type === 'Expense').reduce((s, c) => s + (state.budgets[c.name] || 0), 0);
+  const monthLabel = new Date(ym + '-01T00:00:00').toLocaleDateString('en-MY', { month: 'long', year: 'numeric' });
+
+  document.getElementById('dashboard-month-title').textContent = monthLabel;
+  document.getElementById('dashboard-summary').innerHTML = `
+    <table>
+      <tr><td>Planned income</td><td class="num">${esc(fmtRM(plannedIncome))}</td></tr>
+      <tr><td>Actual income logged</td><td class="num">${esc(fmtRM(income))}</td></tr>
+      <tr><td>Planned expenses</td><td class="num">${esc(fmtRM(plannedExpense))}</td></tr>
+      <tr><td>Actual expenses logged</td><td class="num">${esc(fmtRM(expense))}</td></tr>
+      <tr><td><b>Planned net</b></td><td class="num"><b>${esc(fmtRM(plannedIncome - plannedExpense))}</b></td></tr>
+      <tr><td><b>Actual net (this month)</b></td><td class="num"><b>${esc(fmtRM(income - expense))}</b></td></tr>
+    </table>`;
+
+  const groups = ['Fixed', 'Savings', 'Family', 'Lifestyle', 'Optional', 'Other'];
+  let rows = `<table><tr><th>Category</th><th class="num">Target</th><th class="num">Actual</th><th class="num">Variance</th></tr>`;
+  groups.forEach(g => {
+    const cats = CATEGORIES.filter(c => c.group === g && c.type === 'Expense');
+    if (!cats.length) return;
+    rows += `<tr class="group-head"><td colspan="4">${esc(g)}</td></tr>`;
+    cats.forEach(c => {
+      const target = state.budgets[c.name] || 0;
+      const actual = byCategory[c.name] || 0;
+      const variance = target - actual;
+      const over = target > 0 && actual > target;
+      rows += `<tr>
+        <td>${esc(c.name)}</td>
+        <td class="num">${target ? esc(fmtRM(target)) : '–'}</td>
+        <td class="num">${actual ? esc(fmtRM(actual)) : '–'}</td>
+        <td class="num ${over ? 'status-over' : 'status-ok'}">${target ? esc(fmtRM(variance)) : '–'}</td>
+      </tr>`;
+    });
+  });
+  rows += `</table>`;
+  document.getElementById('dashboard-breakdown').innerHTML = rows;
+}
+
+function renderSyncTab() {
+  const pending = state.transactions.filter(t => !state.syncedIds.has(t.id)).length;
+  const el = document.getElementById('sync-sheet-id');
+  if (document.activeElement !== el) el.value = state.sheetId; // don't fight the user mid-type
+
+  const signedIn = !!state.accessToken;
+  document.getElementById('btn-google-signin').textContent = signedIn ? 'Connected ✓' : 'Connect Google';
+  document.getElementById('btn-sync-now').disabled = !(signedIn && state.sheetId && pending > 0) || state.syncing;
+  document.getElementById('btn-sync-now').textContent = state.syncing ? 'Syncing…' : `Sync now (${pending} pending)`;
+
+  document.getElementById('sync-status').innerHTML = `
+    <div class="stat-row" style="grid-template-columns:1fr 1fr">
+      <div class="stat"><div class="v">${pending}</div><div class="l">Not yet synced</div></div>
+      <div class="stat ${signedIn ? 'good' : ''}"><div class="v">${signedIn ? 'Yes' : 'No'}</div><div class="l">Signed in</div></div>
+    </div>
+    ${state.lastSyncMsg ? `<p class="muted" style="font-size:12.5px">${esc(state.lastSyncMsg)}</p>` : ''}
+  `;
+}
+
+/* ---------- Google sign-in + sync (impure — needs the network) ---------- */
+let googleTokenClient = null;
+
+function ensureTokenClient() {
+  if (googleTokenClient || typeof google === 'undefined') return googleTokenClient;
+  googleTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: SHEETS_SCOPE,
+    callback: (resp) => {
+      if (resp.error) { toast('Google sign-in failed: ' + resp.error); return; }
+      state.accessToken = resp.access_token;
+      toast('Connected to Google.');
+      render();
+    },
+  });
+  return googleTokenClient;
+}
+
+function doGoogleSignIn() {
+  if (typeof google === 'undefined') { toast('Google sign-in script not loaded — check your connection.'); return; }
+  const client = ensureTokenClient();
+  if (!client) return;
+  client.requestAccessToken();
+}
+
+async function sheetsFetch(url, options) {
+  const res = await fetch(url, {
+    ...options,
+    headers: { ...(options && options.headers), Authorization: `Bearer ${state.accessToken}` },
+  });
+  if (!res.ok) {
+    if (res.status === 401) state.accessToken = null; // token expired — needs reconnect
+    const body = await res.text().catch(() => '');
+    throw new Error(`Sheets API ${res.status}: ${body.slice(0, 200)}`);
+  }
+  return res.json();
+}
+
+async function doSyncNow() {
+  if (!state.accessToken || !state.sheetId || state.syncing) return;
+  const toSync = state.transactions.filter(t => !state.syncedIds.has(t.id));
+  if (!toSync.length) { toast('Nothing to sync.'); return; }
+
+  state.syncing = true; render();
+  try {
+    const colA = await sheetsFetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(state.sheetId)}/values/${SHEET_TAB}!A:A`
+    );
+    const startRow = findFirstEmptyRow(colA.values || [[]]);
+    const writes = buildSyncWrites(toSync, startRow);
+
+    const data = [];
+    writes.forEach(w => { data.push(w.ab); data.push(w.de); });
+    await sheetsFetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(state.sheetId)}/values:batchUpdate`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data }) }
+    );
+
+    writes.forEach(w => state.syncedIds.add(w.transactionId));
+    saveSyncedIds([...state.syncedIds]);
+    state.lastSyncMsg = `Synced ${writes.length} transaction(s) just now.`;
+    toast(state.lastSyncMsg);
+  } catch (e) {
+    state.lastSyncMsg = 'Sync failed: ' + e.message;
+    toast('Sync failed — see the Sync tab for details.');
+  } finally {
+    state.syncing = false; render();
+  }
+}
+
+/* ---------- toast ---------- */
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+/* ---------- actions ---------- */
+function doParseInput() {
+  const textarea = document.getElementById('capture-input');
+  const text = textarea.value.trim();
+  if (!text) return;
+  state.pending = parseInput(text, state.learned);
+  flagDuplicates(state.pending, state.transactions, todayISO());
+  render();
+}
+
+function doRemovePending(i) {
+  state.pending.splice(i, 1);
+  render();
+}
+
+function doSavePending() {
+  const now = Date.now();
+  const today = todayISO();
+  const bad = state.pending.filter(p => !(p.amount > 0));
+  if (bad.length) { toast('Fix the amount on the highlighted line(s) first.'); return; }
+  state.pending.forEach((p, i) => {
+    state.transactions.push({
+      id: uid(), date: today, category: p.category, type: catInfo(p.category).type,
+      amount: p.amount, note: p.note, rawText: p.rawText, createdAt: now + i,
+    });
+  });
+  saveTransactions(state.transactions);
+  state.pending = [];
+  document.getElementById('capture-input').value = '';
+  toast('Saved.');
+  render();
+}
+
+function doCancelPending() { state.pending = []; render(); }
+
+function exportCSV() {
+  const header = ['Date', 'Category', 'Type', 'Amount (RM)', 'Notes', 'Month'];
+  const lines = [header.join(',')];
+  [...state.transactions].sort((a, b) => a.createdAt - b.createdAt).forEach(t => {
+    const row = [t.date, t.category, t.type, t.amount.toFixed(2), t.note, monthKey(t.date)]
+      .map(v => `"${String(v).replace(/"/g, '""')}"`);
+    lines.push(row.join(','));
+  });
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'personal-cfo-transactions.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  toast('CSV downloaded — paste rows into your Google Sheet Transaction Log.');
+}
+
+/* ---------- event delegation ---------- */
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const action = el.dataset.action;
+  if (action === 'switch-tab') { state.tab = el.dataset.tab; render(); }
+  else if (action === 'parse-input') doParseInput();
+  else if (action === 'save-pending') doSavePending();
+  else if (action === 'cancel-pending') doCancelPending();
+  else if (action === 'export-csv') exportCSV();
+  else if (action === 'remove-pending') doRemovePending(Number(el.dataset.index));
+  else if (action === 'google-signin') doGoogleSignIn();
+  else if (action === 'sync-now') doSyncNow();
+});
+
+document.addEventListener('input', (e) => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const action = el.dataset.action;
+  if (action === 'edit-pending-amount') {
+    const i = Number(el.dataset.index);
+    state.pending[i].amount = el.value === '' ? null : parseFloat(el.value);
+  } else if (action === 'edit-pending-note') {
+    state.pending[Number(el.dataset.index)].note = el.value;
+  } else if (action === 'edit-budget') {
+    state.budgets[el.dataset.category] = el.value === '' ? 0 : parseFloat(el.value);
+    saveBudgets(state.budgets);
+  } else if (action === 'edit-sheet-id') {
+    state.sheetId = el.value.trim();
+    saveSheetId(state.sheetId);
+  }
+});
+
+document.addEventListener('change', (e) => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  if (el.dataset.action === 'edit-pending-category') {
+    const i = Number(el.dataset.index);
+    const p = state.pending[i];
+    p.category = el.value;
+    p.type = catInfo(el.value).type;
+    p.confidence = 1; // user-confirmed
+    // Manual correction teaches the categorizer for next time.
+    learnFromCorrection(p.rawText, el.value, state.learned);
+    saveLearned(state.learned);
+    render();
+  }
+});
+
+/* ---------- boot ---------- */
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+  });
+}
+render();
+</script>

@@ -1,0 +1,513 @@
+<title>Personal CFO — Telegram</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  /* Same palette as index.html — kept as its own copy since this is a
+     separate single-file entry point (see the note above CATEGORIES below
+     for why the domain logic is duplicated too). */
+  :root{
+    --bg:#0b1220; --panel:#111a2e; --panel2:#0f1830; --border:#22314f;
+    --text:#e7ecf7; --muted:#93a1c0; --accent:#5b8def; --accent2:#22c55e;
+    --warn:#f59e0b; --bad:#ef4444; --good:#22c55e;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  body{padding-bottom:96px}
+  .hidden{display:none !important}
+  header{position:sticky;top:0;z-index:5;background:rgba(11,18,32,.92);backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--border);padding:14px 16px 10px}
+  header h1{margin:0;font-size:18px;font-weight:700;letter-spacing:.2px}
+  header p{margin:2px 0 0;color:var(--muted);font-size:12.5px}
+  main{max-width:640px;margin:0 auto;padding:14px 14px 24px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+    padding:14px;margin-bottom:12px}
+  textarea{width:100%;min-height:90px;background:var(--panel2);color:var(--text);
+    border:1px solid var(--border);border-radius:10px;padding:10px;font-size:15px;resize:vertical}
+  textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
+  button{font:inherit;cursor:pointer}
+  .btn{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:10px 16px;
+    font-weight:600}
+  .btn.secondary{background:transparent;border:1px solid var(--border);color:var(--text)}
+  .btn.small{padding:6px 10px;font-size:13px;border-radius:8px}
+  .btn.block{width:100%}
+  .row{display:flex;gap:8px}
+  .muted{color:var(--muted)}
+  .section-title{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.03em;margin:2px 0 8px}
+  .pending-item{border:1px solid var(--border);border-radius:10px;padding:10px;margin-top:8px;
+    background:var(--panel2)}
+  .pending-item .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .pending-item .amt{font-weight:700;font-size:16px}
+  .pending-item .raw{color:var(--muted);font-size:12.5px;margin-top:2px}
+  .pending-item select,.pending-item input{width:100%;background:var(--bg);color:var(--text);
+    border:1px solid var(--border);border-radius:8px;padding:6px 8px;margin-top:6px;font-size:13.5px}
+  .badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:6px;
+    margin-left:6px;vertical-align:middle}
+  .badge.review{background:rgba(245,158,11,.18);color:var(--warn)}
+  .badge.income{background:rgba(34,197,94,.18);color:var(--good)}
+  .badge.expense{background:rgba(239,68,68,.14);color:#f87171}
+  .badge.queued{background:rgba(147,161,192,.18);color:var(--muted)}
+  .log-item{display:flex;justify-content:space-between;gap:10px;padding:8px 0;
+    border-bottom:1px solid var(--border)}
+  .log-item:last-child{border-bottom:none}
+  .log-item .cat{font-weight:600}
+  .log-item .meta{color:var(--muted);font-size:12px}
+  .log-item .amt{font-weight:700;white-space:nowrap}
+  .log-item .amt.income{color:var(--good)}
+  .empty{color:var(--muted);text-align:center;padding:22px 10px;font-size:14px}
+  .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1c2a4a;
+    border:1px solid var(--border);padding:9px 16px;border-radius:20px;font-size:13px;
+    box-shadow:0 6px 20px rgba(0,0,0,.4);z-index:20;opacity:0;pointer-events:none;
+    transition:opacity .2s;max-width:90vw;text-align:center}
+  .toast.show{opacity:1}
+  .status-line{font-size:12px;color:var(--muted);margin-top:8px}
+  .status-line.warn{color:var(--warn)}
+</style>
+
+<header>
+  <h1>💰 Personal CFO</h1>
+  <p>Type what happened with your money — this sends straight to your real sheet.</p>
+</header>
+
+<main>
+  <div class="card">
+    <div class="section-title">Add transaction(s)</div>
+    <textarea id="capture-input" placeholder="dinner rm10, telur rm12, apple rm12.50&#10;received salary 1900&#10;reload boost 50"></textarea>
+    <div class="row" style="margin-top:8px">
+      <button class="btn block" data-action="parse-input">Parse</button>
+    </div>
+    <div id="pending-list"></div>
+    <div id="pending-actions" class="row hidden" style="margin-top:10px">
+      <button class="btn secondary" data-action="cancel-pending">Cancel</button>
+      <button class="btn block" id="btn-fallback-save" data-action="save-pending">Save all</button>
+    </div>
+    <div id="status-line" class="status-line"></div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Recently sent from here</div>
+    <div id="recent-log"></div>
+  </div>
+</main>
+
+<div id="toast" class="toast"></div>
+
+<script>
+/* =========================================================================
+   Personal CFO — Telegram Mini App capture surface
+
+   This is a second, standalone input channel for the same Personal CFO
+   system (see docs/finance-system-master-prompt.md, Phase 4: "optional
+   Telegram capture as a second input surface"). It intentionally does NOT
+   share code with index.html: index.html's parser/taxonomy live inside its
+   own inline <script> block, and harness.js (the test runner both files
+   use) only executes inline scripts, not <script src>-loaded files — so a
+   shared module would be invisible to node test.js's stubbed-DOM tests.
+   Duplicating the small, stable parser/taxonomy here (instead of importing)
+   keeps both files independently testable with the same harness pattern.
+
+   >>> If you change CATEGORIES, KEYWORD_MAP, or the parse functions in
+   >>> index.html, mirror the change here (and in
+   >>> netlify/functions/telegram-save.mjs's CATEGORY_NAMES allowlist).
+
+   Unlike index.html (client-side Google OAuth via Sign in with Google),
+   this file can't run an OAuth popup inside Telegram's in-app WebView, so
+   saving goes through a Netlify function (telegram-save.mjs) that verifies
+   Telegram's signed initData and writes to the sheet with a service
+   account. See TELEGRAM_SETUP.md for the one-time bot/backend setup.
+   ========================================================================= */
+
+/* ---------- helpers ---------- */
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const fmtRM = (n) => 'RM' + (Math.round((n + Number.EPSILON) * 100) / 100)
+  .toLocaleString('en-MY', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const uid = () => 'tx_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+/* ---------- category taxonomy (verbatim copy of index.html's CATEGORIES) ---------- */
+const CATEGORIES = [
+  { name: "Full-time salary (net)",        type: "Income",  group: "Income",    budget: 1942.95 },
+  { name: "Part-time / gig income",        type: "Income",  group: "Income",    budget: 0 },
+  { name: "Sewa rumah (own rent)",         type: "Expense", group: "Fixed",     budget: 250 },
+  { name: "Girlfriend's rent help",        type: "Expense", group: "Fixed",     budget: 0 },
+  { name: "Petrol",                        type: "Expense", group: "Fixed",     budget: 150 },
+  { name: "Reload (Boost eWallet)",        type: "Expense", group: "Fixed",     budget: 100 },
+  { name: "Utility",                       type: "Expense", group: "Fixed",     budget: 20 },
+  { name: "Food (daily)",                  type: "Expense", group: "Fixed",     budget: 300 },
+  { name: "Car sinking fund",              type: "Expense", group: "Savings",   budget: 120 },
+  { name: "Emergency Fund Tier 1",         type: "Expense", group: "Savings",   budget: 150 },
+  { name: "Emergency Fund Tier 2 (ASB)",   type: "Expense", group: "Savings",   budget: 350 },
+  { name: "Gold savings for Mom",          type: "Expense", group: "Family",    budget: 0 },
+  { name: "Sunday treat",                  type: "Expense", group: "Lifestyle", budget: 100 },
+  { name: "Dobi (laundry)",                type: "Expense", group: "Lifestyle", budget: 44 },
+  { name: "Post-jog drinks",               type: "Expense", group: "Lifestyle", budget: 91 },
+  { name: "PTPTN voluntary payment",       type: "Expense", group: "Optional",  budget: 0 },
+  { name: "Other food",                    type: "Expense", group: "Lifestyle", budget: 0 },
+  { name: "Other / Miscellaneous",         type: "Expense", group: "Other",     budget: 0 },
+];
+const CATEGORY_NAMES = CATEGORIES.map(c => c.name);
+const catInfo = (name) => CATEGORIES.find(c => c.name === name) || CATEGORIES[CATEGORIES.length - 1];
+
+const KEYWORD_MAP = [
+  [/\b(salary|gaji|payroll)\b/i, "Full-time salary (net)"],
+  [/\b(freelance|gig|part\s*time|part-time)\b/i, "Part-time / gig income"],
+  [/\b(rent|sewa)\b/i, "Sewa rumah (own rent)"],
+  [/\b(girlfriend|gf)\b.*\brent\b/i, "Girlfriend's rent help"],
+  [/\b(petrol|minyak|fuel|ron95|ron97)\b/i, "Petrol"],
+  [/\b(boost|reload|top ?up|e-?wallet|ewallet|shopeepay|tng)\b/i, "Reload (Boost eWallet)"],
+  [/\b(utility|utilities|bill|tnb|water bill|electric)\b/i, "Utility"],
+  [/\b(car sinking|car fund)\b/i, "Car sinking fund"],
+  [/\b(emergency fund tier 1|ef ?1|ef tier 1)\b/i, "Emergency Fund Tier 1"],
+  [/\b(asb|emergency fund tier 2|ef ?2|ef tier 2)\b/i, "Emergency Fund Tier 2 (ASB)"],
+  [/\b(gold)\b/i, "Gold savings for Mom"],
+  [/\bsunday treat\b/i, "Sunday treat"],
+  [/\b(dobi|laundry)\b/i, "Dobi (laundry)"],
+  [/\b(jog|run|lari|post-?jog|post workout)\b/i, "Post-jog drinks"],
+  [/\bptptn\b/i, "PTPTN voluntary payment"],
+  [/\b(dinner|lunch|breakfast|makan|food|beli|groceries|nasi|roti|ayam|telur|apple|bakso|kangkung|bawang|pisang|aiskrim|mineral|buntut|drinks?|tea|coffee|americano)\b/i, "Food (daily)"],
+];
+const INCOME_HINT = /\b(received|receive|gave me|gift|refund|bonus|dividend|income)\b/i;
+const LEARN_STOPWORDS = new Set([
+  'the','and','for','with','from','this','that','done','paid','rm','a','an',
+  'me','my','to','of','on','in','at','is','it','was','ni','tu','yang','dan'
+]);
+
+/* ---------- storage layer ---------- */
+const LS_LEARNED = 'pcfo_learned_v1'; // same key as index.html — shared if the WebView happens to share storage, harmless if not
+const LS_QUEUE = 'pcfo_tg_offline_queue_v1';
+const LS_RECENT = 'pcfo_tg_recent_v1';
+
+function safeGet(key, fallback) {
+  try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }
+  catch (e) { return fallback; }
+}
+function safeSet(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+  catch (e) { return false; }
+}
+
+function loadLearned() { return safeGet(LS_LEARNED, {}); }
+function saveLearned(map) { return safeSet(LS_LEARNED, map); }
+function loadQueue() { return safeGet(LS_QUEUE, []); }
+function saveQueue(list) { return safeSet(LS_QUEUE, list); }
+function loadRecent() { return safeGet(LS_RECENT, []); }
+function saveRecent(list) { return safeSet(LS_RECENT, list.slice(0, 20)); }
+
+function learnableWords(text) {
+  return (text || '').toLowerCase().match(/[a-z][a-z']{2,}/g) || [];
+}
+function learnFromCorrection(rawText, category, learned) {
+  learnableWords(rawText).forEach(w => { if (!LEARN_STOPWORDS.has(w)) learned[w] = category; });
+  return learned;
+}
+
+/* ---------- domain logic (pure — verbatim copy of index.html's parser) ---------- */
+function guessCategory(text, learned) {
+  if (learned) {
+    for (const w of learnableWords(text)) {
+      if (learned[w]) return { category: learned[w], confidence: 0.9 };
+    }
+  }
+  for (const [re, cat] of KEYWORD_MAP) if (re.test(text)) return { category: cat, confidence: 0.85 };
+  if (INCOME_HINT.test(text)) return { category: "Part-time / gig income", confidence: 0.35 };
+  return { category: "Other / Miscellaneous", confidence: 0.3 };
+}
+
+function extractAmount(segment) {
+  let m = segment.match(/rm\s*([\d,]+(?:\.\d{1,2})?)/i);
+  if (m) {
+    const amount = parseFloat(m[1].replace(/,/g, ''));
+    const rest = (segment.slice(0, m.index) + ' ' + segment.slice(m.index + m[0].length)).trim();
+    return { amount, rest };
+  }
+  m = segment.match(/\b(\d+(?:\.\d{1,2})?)\b/);
+  if (m) {
+    const amount = parseFloat(m[1]);
+    const rest = (segment.slice(0, m.index) + ' ' + segment.slice(m.index + m[0].length)).trim();
+    return { amount, rest };
+  }
+  return null;
+}
+
+function splitSegments(text) {
+  return text.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
+}
+
+function parseSegment(segment, learned) {
+  const extracted = extractAmount(segment);
+  if (!extracted || !(extracted.amount > 0)) {
+    return { rawText: segment, amount: null, note: segment, category: "Other / Miscellaneous",
+             type: "Expense", confidence: 0, error: 'No amount found' };
+  }
+  const note = extracted.rest.replace(/\s+/g, ' ').replace(/^(for|on|to)\s+/i, '').trim();
+  const { category, confidence } = guessCategory(segment, learned);
+  const type = catInfo(category).type;
+  return { rawText: segment, amount: extracted.amount, note: note || segment,
+           category, type, confidence, error: null };
+}
+
+function parseInput(text, learned) {
+  return splitSegments(text).map(s => parseSegment(s, learned));
+}
+
+/* ---------- Telegram WebApp bridge (absent when opened in a plain browser) ---------- */
+const tg = (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) || null;
+if (tg) {
+  tg.ready();
+  tg.expand();
+  try { tg.setHeaderColor('#0f172a'); } catch (e) {}
+}
+
+/* ---------- app state ---------- */
+const state = {
+  pending: [],
+  learned: loadLearned(),
+  recent: loadRecent(),
+  queueLength: loadQueue().length,
+  saving: false,
+};
+
+/* ---------- render ---------- */
+function render() {
+  renderPending();
+  renderRecent();
+  renderStatus();
+  syncMainButton();
+}
+
+function pendingItemHTML(p, i) {
+  const opts = CATEGORY_NAMES.map(n =>
+    `<option value="${esc(n)}" ${n === p.category ? 'selected' : ''}>${esc(n)}</option>`).join('');
+  const info = catInfo(p.category);
+  const typeBadge = `<span class="badge ${info.type === 'Income' ? 'income' : 'expense'}">${info.type}</span>`;
+  const reviewBadge = p.confidence < 0.5 ? `<span class="badge review">check category</span>` : '';
+  const errorLine = p.error ? `<div class="raw" style="color:var(--bad)">⚠ ${esc(p.error)} — edit amount below</div>` : '';
+  return `
+    <div class="pending-item" data-pending-index="${i}">
+      <div class="top">
+        <div class="amt">${p.amount != null ? esc(fmtRM(p.amount)) : '—'}</div>
+        <div>${typeBadge}${reviewBadge}</div>
+      </div>
+      <div class="raw">"${esc(p.rawText)}"</div>
+      ${errorLine}
+      <input type="number" step="0.01" min="0" placeholder="Amount (RM)"
+        value="${p.amount != null ? p.amount : ''}" data-action="edit-pending-amount" data-index="${i}">
+      <select data-action="edit-pending-category" data-index="${i}">${opts}</select>
+      <input type="text" placeholder="Note" value="${esc(p.note)}"
+        data-action="edit-pending-note" data-index="${i}">
+      <button class="btn secondary small" style="margin-top:6px" data-action="remove-pending" data-index="${i}">Remove this line</button>
+    </div>`;
+}
+
+function renderPending() {
+  const list = document.getElementById('pending-list');
+  const actions = document.getElementById('pending-actions');
+  if (!state.pending.length) { list.innerHTML = ''; actions.classList.add('hidden'); return; }
+  list.innerHTML = state.pending.map(pendingItemHTML).join('');
+  actions.classList.remove('hidden');
+  document.getElementById('btn-fallback-save').textContent = state.saving ? 'Saving…' : 'Save all';
+}
+
+function recentItemHTML(t) {
+  const info = catInfo(t.category);
+  const sign = t.type === 'Income' ? '+' : '−';
+  const queuedBadge = t.queued ? `<span class="badge queued">queued</span>` : '';
+  return `
+    <div class="log-item">
+      <div>
+        <div class="cat">${esc(t.category)}${queuedBadge}</div>
+        <div class="meta">${esc(t.date)}${t.note ? ' · ' + esc(t.note) : ''} · ${esc(info.group)}</div>
+      </div>
+      <div class="amt ${t.type === 'Income' ? 'income' : ''}">${sign}${esc(fmtRM(t.amount))}</div>
+    </div>`;
+}
+
+function renderRecent() {
+  const el = document.getElementById('recent-log');
+  el.innerHTML = state.recent.length
+    ? state.recent.map(recentItemHTML).join('')
+    : `<div class="empty">Nothing sent from Telegram yet.</div>`;
+}
+
+function renderStatus() {
+  const el = document.getElementById('status-line');
+  if (state.queueLength > 0) {
+    el.className = 'status-line warn';
+    el.textContent = `${state.queueLength} transaction(s) saved offline — will sync to the sheet automatically once back online.`;
+  } else {
+    el.className = 'status-line';
+    el.textContent = tg ? '' : 'Opened outside Telegram — Save will still try the backend, then queue offline.';
+  }
+}
+
+// Telegram's native bottom button, used instead of the in-page "Save all"
+// button whenever the Mini App is actually running inside Telegram.
+function syncMainButton() {
+  if (!tg || !tg.MainButton) return;
+  if (state.pending.length && !state.saving) {
+    tg.MainButton.setText(`Save ${state.pending.length}`);
+    tg.MainButton.show();
+    document.getElementById('btn-fallback-save').classList.add('hidden');
+  } else if (state.saving) {
+    tg.MainButton.setText('Saving…');
+    tg.MainButton.show();
+  } else {
+    tg.MainButton.hide();
+  }
+}
+if (tg && tg.MainButton) tg.MainButton.onClick(() => doSavePending());
+
+/* ---------- toast ---------- */
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+/* ---------- save + sync (impure — needs the network) ---------- */
+
+// POSTs one batch to the backend with a timeout, so a flaky connection
+// inside Telegram's WebView falls back to the offline queue quickly instead
+// of hanging the Save button.
+async function sendToBackend(transactions) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+  try {
+    const res = await fetch('/.netlify/functions/telegram-save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ initData: tg ? tg.initData : '', transactions }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `Server responded ${res.status}`);
+    }
+    return true;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Tries to flush anything saved offline. Safe to call opportunistically
+// (on load, on 'online', and after every successful send) since it's a
+// no-op when the queue is empty.
+async function flushQueue() {
+  const queue = loadQueue();
+  if (!queue.length) return;
+  try {
+    await sendToBackend(queue);
+    saveQueue([]);
+    state.queueLength = 0;
+    state.recent = state.recent.map(t => t.queued ? { ...t, queued: false } : t);
+    saveRecent(state.recent);
+    toast(`Synced ${queue.length} queued transaction(s) to the sheet.`);
+    render();
+  } catch (e) {
+    // still offline / backend still unreachable — leave the queue as-is
+  }
+}
+
+/* ---------- actions ---------- */
+function doParseInput() {
+  const textarea = document.getElementById('capture-input');
+  const text = textarea.value.trim();
+  if (!text) return;
+  state.pending = parseInput(text, state.learned);
+  render();
+}
+
+function doRemovePending(i) {
+  state.pending.splice(i, 1);
+  render();
+}
+
+function doCancelPending() { state.pending = []; render(); }
+
+async function doSavePending() {
+  if (state.saving) return;
+  const bad = state.pending.filter(p => !(p.amount > 0));
+  if (bad.length) { toast('Fix the amount on the highlighted line(s) first.'); return; }
+  if (!state.pending.length) return;
+
+  const today = todayISO();
+  const batch = state.pending.map(p => ({
+    date: today, category: p.category, type: catInfo(p.category).type,
+    amount: p.amount, note: p.note,
+  }));
+
+  state.saving = true; render();
+  let queued = false;
+  try {
+    await sendToBackend(batch);
+  } catch (e) {
+    queued = true;
+    const q = loadQueue();
+    saveQueue(q.concat(batch));
+    state.queueLength = q.length + batch.length;
+  }
+
+  state.recent = batch.map(t => ({ ...t, queued })).concat(state.recent);
+  saveRecent(state.recent);
+
+  toast(queued ? 'Saved offline — will sync to the sheet once back online.' : 'Sent to your sheet.');
+  state.pending = [];
+  document.getElementById('capture-input').value = '';
+  state.saving = false;
+  render();
+}
+
+/* ---------- event delegation ---------- */
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const action = el.dataset.action;
+  if (action === 'parse-input') doParseInput();
+  else if (action === 'save-pending') doSavePending();
+  else if (action === 'cancel-pending') doCancelPending();
+  else if (action === 'remove-pending') doRemovePending(Number(el.dataset.index));
+});
+
+document.addEventListener('input', (e) => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const action = el.dataset.action;
+  if (action === 'edit-pending-amount') {
+    const i = Number(el.dataset.index);
+    state.pending[i].amount = el.value === '' ? null : parseFloat(el.value);
+  } else if (action === 'edit-pending-note') {
+    state.pending[Number(el.dataset.index)].note = el.value;
+  }
+});
+
+document.addEventListener('change', (e) => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  if (el.dataset.action === 'edit-pending-category') {
+    const i = Number(el.dataset.index);
+    const p = state.pending[i];
+    p.category = el.value;
+    p.type = catInfo(el.value).type;
+    p.confidence = 1; // user-confirmed
+    learnFromCorrection(p.rawText, el.value, state.learned);
+    saveLearned(state.learned);
+    render();
+  }
+});
+
+/* ---------- boot ---------- */
+if (typeof window !== 'undefined' && window.addEventListener) {
+  window.addEventListener('online', flushQueue);
+}
+flushQueue();
+render();
+</script>
