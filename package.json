@@ -1,5 +1,5 @@
 {
-  "name": "personal-cfo",
+  "name": "manager",
   "private": true,
   "dependencies": {
     "googleapis": "^140.0.0"
