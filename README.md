@@ -8,14 +8,15 @@ benefit at solo-user scale).
 
 ## Status
 
-**Built: TikTok Affiliate Hub.** Everything else is a placeholder panel in
-the tab bar, in build-priority order:
+**Built: TikTok Affiliate Hub, Personal CFO.** Dashboard/YouTube/Bible are
+still placeholder panels, in build-priority order:
 
-1. ✅ **TikTok Affiliate Hub** — this pass.
-2. ⬜ **Personal CFO** — next. Reads/writes the real `± money` combined sheet
+1. ✅ **TikTok Affiliate Hub** — see below.
+2. ✅ **Personal CFO** — reads/writes the real `± money` combined sheet
    (`noelfowler5-ship-it/pm-money`) via a Netlify function + Google service
    account, since Telegram's in-app WebView blocks Google's own OAuth sign-in
-   screen (the pattern `pm-money` itself uses in a real browser).
+   screen (the pattern `pm-money` itself uses in a real browser). One-time
+   setup: [`CFO_SETUP.md`](CFO_SETUP.md).
 3. ⬜ **Dashboard** — home tab, summary cards pulling from the other four.
 4. ⬜ **YouTube Analyzer** — views/subscribers need only a free API key;
    Click-Through Rate/Watch Time need a one-time OAuth consent done in a real
@@ -57,6 +58,30 @@ explicitly declined). CapCut and TikTok's native scheduler stay external.
   ship the wording, but the pattern match isn't exhaustive, so read before
   posting regardless.
 
+## Personal CFO
+
+A thin view over `pm-money`'s Money section — does not reimplement its
+parser, categorization, or sync logic, just calls the same taxonomy against
+the same combined sheet. Read/write goes through a Netlify function using a
+Google service account rather than the interactive Google sign-in the
+`pm-money` web app uses, since Telegram's WebView blocks that sign-in screen.
+
+- **Capture** — same flow as `pm-money`/`personal-cfo`: type one or more
+  transactions, editable confirmation card per line (category pre-filled,
+  correctable — a correction teaches the parser that word for next time),
+  save. A same-category same-amount entry logged today is flagged as a
+  possible duplicate before saving.
+- **This month** — income, expenses, balance, computed server-side from the
+  real `Money - Transactions` tab.
+- **Spending by category** — actual vs. budget target, read from
+  `Money - Budget Plan`.
+- **Recent transactions** — last 10, newest first.
+- Offline-safe the same way the TikTok Hub content is: a save that can't
+  reach the backend queues in `localStorage` and retries automatically once
+  back online — never silently lost, never silently duplicated on retry.
+
+Setup (service account, env vars): [`CFO_SETUP.md`](CFO_SETUP.md).
+
 ## Running it
 
 No install needed — download/clone, open `index.html` in a browser. Outside
@@ -70,23 +95,29 @@ Single-file app (`index.html`, HTML/CSS/JS inline) — no build step, no npm,
 same shape as this account's other browser apps. `manifest.json` /
 `service-worker.js` make it installable and offline-capable.
 
-Before changing generator or planner logic, run the tests:
+Before changing generator, planner, or parser logic, run the tests:
 
 ```sh
-node test.js                  # TikTok Hub domain logic + render
-node test-telegram-verify.js  # Telegram initData HMAC check (for the CFO tab, next)
+node test.js                  # TikTok Hub + CFO domain logic and render
+node test-telegram-verify.js  # Telegram initData HMAC check (used by both Netlify functions)
 ```
 
 `test.js` runs the app's own JavaScript inside Node against a stubbed DOM
-(`harness.js`) — no browser required. Keep it green, and when you touch a
-generator, print a few real outputs and read them — the test suite checks
-structure (right scene count, non-empty, capitalized, flagged when it should
-be) but broken-but-structurally-valid grammar won't fail a single assertion.
+(`harness.js`) — no browser required, `fetch` is stubbed to always reject so
+the CFO tab's offline-queue path is exercised automatically. Keep it green,
+and when you touch a generator, print a few real outputs and read them — the
+test suite checks structure (right scene count, non-empty, capitalized,
+flagged when it should be) but broken-but-structurally-valid grammar won't
+fail a single assertion.
 
-`netlify/functions/lib/telegram-verify.mjs` (HMAC validation of Telegram's
-signed `initData`) is already in place from an earlier capture-only
-prototype of this project and will be reused as-is for the CFO tab's Netlify
-function — nothing to change there yet.
+CFO's parser/taxonomy (`CFO_CATEGORIES`, `CFO_KEYWORD_MAP`, etc. in
+`index.html`) is a duplicate of `pm-money`'s (same reasoning as the TikTok
+Hub logic — no module boundary the harness can share), and
+`netlify/functions/lib/cfo-categories.mjs` is a third copy for server-side
+validation. If `pm-money`'s categories or keyword rules change, update all
+three. `netlify/functions/lib/telegram-verify.mjs` (HMAC validation of
+Telegram's signed `initData`) is generic and shared by both Netlify
+functions unchanged.
 
 ## Design reference
 

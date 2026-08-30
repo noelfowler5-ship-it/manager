@@ -109,6 +109,55 @@ state.ttSubtab = 'compliance';
 state.compliance = {};
 render();
 ok(html('#tiktok-content').includes('Never checked yet'), 'compliance view shows unreviewed state with no data');
+
+section('CFO parser — same taxonomy and behaviour as pm-money');
+let cp = cfoParseSegment('dinner rm10');
+ok(cp.amount === 10 && cp.category === 'Food (daily)', 'dinner rm10 -> Food (daily) RM10');
+cp = cfoParseSegment('girlfriend rent 200');
+ok(cp.category === "Girlfriend's rent help", 'the specific girlfriend-rent rule wins over the generic rent rule (pm-money\\'s deliberate fix): got ' + cp.category);
+cp = cfoParseSegment('sewa rumah 250');
+ok(cp.category === 'Sewa rumah (own rent)', 'plain rent/sewa still matches the generic rule: got ' + cp.category);
+let cList = cfoParseInput('dinner rm10, telur rm12, apple rm12.50');
+ok(cList.length === 3, 'multi-transaction split works the same as pm-money\\'s parser');
+
+section('CFO — duplicate flagging against server-supplied today list');
+let pending = cfoParseInput('dinner rm10');
+cfoFlagDuplicates(pending, [{ category: 'Food (daily)', amount: 10 }]);
+ok(pending[0].duplicate === true, 'a same-category same-amount entry already logged today is flagged');
+pending = cfoParseInput('dinner rm10');
+cfoFlagDuplicates(pending, [{ category: 'Food (daily)', amount: 99 }]);
+ok(pending[0].duplicate === false, 'a different amount is not flagged');
 `, 'render');
 
-app.done();
+// The CFO tab's save/status calls are async (they await fetch, which the
+// harness stubs to always reject) — driven from real Node rather than
+// inside app.run()'s synchronous vm script, same pattern telegram.html's
+// tests used for its offline-save path.
+(async () => {
+  app.run(`
+  section('render — CFO tab, backend unreachable (harness fetch always rejects)');
+  state.tab = 'cfo';
+  `, 'cfo-setup');
+  await app.ctx.fetchCFOStatus();
+  app.run(`
+  ok(state.cfo.error, 'a failed status fetch records an error instead of throwing');
+  render();
+  ok(html('#cfo-content').includes("Couldn't reach"), 'CFO tab shows a clear backend-unreachable state, not a blank screen');
+
+  section('CFO capture — offline queue fallback');
+  state.cfo.status = { income: 0, expense: 0, balance: 0, byCategory: {}, budgets: {}, recent: [], today: [] };
+  state.cfo.error = null;
+  document.getElementById('cfo-capture-input').value = 'dinner rm10, telur rm12';
+  doCFOParseInput();
+  ok(state.cfo.pending.length === 2, 'parsing populates two pending transactions');
+  `, 'cfo-parse');
+  await app.ctx.doCFOSavePending();
+  app.run(`
+  ok(state.cfo.pending.length === 0, 'pending clears after save even when the backend is unreachable');
+  ok(state.cfo.offlineQueue.length === 2, 'both transactions land in the offline queue: got ' + state.cfo.offlineQueue.length);
+  render();
+  ok(html('#cfo-content').includes('saved offline'), 'CFO tab surfaces the offline-queue state to the user');
+  `, 'cfo-verify');
+
+  app.done();
+})();

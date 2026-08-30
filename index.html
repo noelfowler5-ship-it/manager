@@ -106,7 +106,7 @@
 
   <!-- CFO TAB -->
   <section id="view-cfo" class="hidden">
-    <div class="empty">Personal CFO is next up — it'll read/write the real ± money sheet through a Netlify service-account function. Not built yet.</div>
+    <div id="cfo-content"></div>
   </section>
 
   <!-- YOUTUBE TAB -->
@@ -165,6 +165,8 @@ const LS = {
   plan: 'pmgr_tt_plan_v1',
   perf: 'pmgr_tt_perf_v1',
   compliance: 'pmgr_tt_compliance_v1',
+  cfoLearned: 'pmgr_cfo_learned_v1',
+  cfoQueue: 'pmgr_cfo_offline_queue_v1',
 };
 function safeGet(key, fallback) {
   try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }
@@ -481,6 +483,130 @@ function complianceStatus(compliance, today) {
 }
 
 /* =========================================================================
+   Personal CFO — domain logic
+
+   Verbatim copy of pm-money's parser/categories (index.html) — the join key
+   for the sheet's own Type/Month formulas and Budget Plan tab. Duplicated
+   rather than imported for the same reason as the TikTok Hub logic above:
+   no module boundary the harness can share. Keep this block, pm-money's
+   copy, and netlify/functions/lib/cfo-categories.mjs in sync.
+
+   Unlike index.html's parser, this tab is a THIN VIEW: it does not keep a
+   local ledger. Reads (month summary, category breakdown, recent
+   transactions, today's-so-far for duplicate flagging) come from
+   /api/cfo/status; writes go to /api/cfo/save. Both hit the real pm-money
+   combined sheet through a Netlify service-account function, since
+   Telegram's WebView blocks Google's own OAuth sign-in screen.
+   ========================================================================= */
+
+const CFO_CATEGORIES = [
+  { name: "Full-time salary (net)",        type: "Income",  group: "Income",    budget: 1942.95 },
+  { name: "Part-time / gig income",        type: "Income",  group: "Income",    budget: 0 },
+  { name: "Sewa rumah (own rent)",         type: "Expense", group: "Fixed",     budget: 250 },
+  { name: "Girlfriend's rent help",        type: "Expense", group: "Fixed",     budget: 0 },
+  { name: "Petrol",                        type: "Expense", group: "Fixed",     budget: 150 },
+  { name: "Reload (Boost eWallet)",        type: "Expense", group: "Fixed",     budget: 100 },
+  { name: "Utility",                       type: "Expense", group: "Fixed",     budget: 20 },
+  { name: "Food (daily)",                  type: "Expense", group: "Fixed",     budget: 300 },
+  { name: "Car sinking fund",              type: "Expense", group: "Savings",   budget: 120 },
+  { name: "Emergency Fund Tier 1",         type: "Expense", group: "Savings",   budget: 150 },
+  { name: "Emergency Fund Tier 2 (ASB)",   type: "Expense", group: "Savings",   budget: 350 },
+  { name: "Gold savings for Mom",          type: "Expense", group: "Family",    budget: 0 },
+  { name: "Sunday treat",                  type: "Expense", group: "Lifestyle", budget: 100 },
+  { name: "Dobi (laundry)",                type: "Expense", group: "Lifestyle", budget: 44 },
+  { name: "Post-jog drinks",               type: "Expense", group: "Lifestyle", budget: 91 },
+  { name: "PTPTN voluntary payment",       type: "Expense", group: "Optional",  budget: 0 },
+  { name: "Other food",                    type: "Expense", group: "Lifestyle", budget: 0 },
+  { name: "Other / Miscellaneous",         type: "Expense", group: "Other",     budget: 0 },
+];
+const CFO_CATEGORY_NAMES = CFO_CATEGORIES.map(c => c.name);
+const cfoCatInfo = (name) => CFO_CATEGORIES.find(c => c.name === name) || CFO_CATEGORIES[CFO_CATEGORIES.length - 1];
+
+// Order matters: girlfriend's-rent must be checked before the generic
+// rent/sewa rule, or the more specific rule is unreachable (first-match-wins)
+// — this is pm-money's one deliberate behavioural fix over the older
+// personal-cfo parser; test-parity.mjs over there records it explicitly.
+const CFO_KEYWORD_MAP = [
+  [/\b(salary|gaji|payroll)\b/i, "Full-time salary (net)"],
+  [/\b(freelance|gig|part\s*time|part-time)\b/i, "Part-time / gig income"],
+  [/\b(girlfriend|gf)\b.*\brent\b/i, "Girlfriend's rent help"],
+  [/\b(rent|sewa)\b/i, "Sewa rumah (own rent)"],
+  [/\b(petrol|minyak|fuel|ron95|ron97)\b/i, "Petrol"],
+  [/\b(boost|reload|top ?up|e-?wallet|ewallet|shopeepay|tng)\b/i, "Reload (Boost eWallet)"],
+  [/\b(utility|utilities|bill|tnb|water bill|electric)\b/i, "Utility"],
+  [/\b(car sinking|car fund)\b/i, "Car sinking fund"],
+  [/\b(emergency fund tier 1|ef ?1|ef tier 1)\b/i, "Emergency Fund Tier 1"],
+  [/\b(asb|emergency fund tier 2|ef ?2|ef tier 2)\b/i, "Emergency Fund Tier 2 (ASB)"],
+  [/\b(gold)\b/i, "Gold savings for Mom"],
+  [/\bsunday treat\b/i, "Sunday treat"],
+  [/\b(dobi|laundry)\b/i, "Dobi (laundry)"],
+  [/\b(jog|run|lari|post-?jog|post workout)\b/i, "Post-jog drinks"],
+  [/\bptptn\b/i, "PTPTN voluntary payment"],
+  [/\b(dinner|lunch|breakfast|makan|food|beli|groceries|nasi|roti|ayam|telur|apple|bakso|kangkung|bawang|pisang|aiskrim|mineral|buntut|drinks?|tea|coffee|americano)\b/i, "Food (daily)"],
+];
+const CFO_INCOME_HINT = /\b(received|receive|gave me|gift|refund|bonus|dividend|income)\b/i;
+const CFO_LEARN_STOPWORDS = new Set([
+  'the', 'and', 'for', 'with', 'from', 'this', 'that', 'done', 'paid', 'rm', 'a', 'an',
+  'me', 'my', 'to', 'of', 'on', 'in', 'at', 'is', 'it', 'was', 'ni', 'tu', 'yang', 'dan',
+]);
+
+function cfoLearnableWords(text) {
+  return (text || '').toLowerCase().match(/[a-z][a-z']{2,}/g) || [];
+}
+function cfoLearnFromCorrection(rawText, category, learned) {
+  cfoLearnableWords(rawText).forEach(w => { if (!CFO_LEARN_STOPWORDS.has(w)) learned[w] = category; });
+  return learned;
+}
+function cfoGuessCategory(text, learned) {
+  if (learned) {
+    for (const w of cfoLearnableWords(text)) {
+      if (learned[w]) return { category: learned[w], confidence: 0.9 };
+    }
+  }
+  for (const [re, cat] of CFO_KEYWORD_MAP) if (re.test(text)) return { category: cat, confidence: 0.85 };
+  if (CFO_INCOME_HINT.test(text)) return { category: "Part-time / gig income", confidence: 0.35 };
+  return { category: "Other / Miscellaneous", confidence: 0.3 };
+}
+function cfoFlagDuplicates(pending, todaysTransactions) {
+  const todaysKeys = new Set((todaysTransactions || []).map(t => `${t.category}|${t.amount}`));
+  pending.forEach(p => { p.duplicate = p.amount != null && todaysKeys.has(`${p.category}|${p.amount}`); });
+  return pending;
+}
+function cfoExtractAmount(segment) {
+  let m = segment.match(/rm\s*([\d,]+(?:\.\d{1,2})?)/i);
+  if (m) {
+    const amount = parseFloat(m[1].replace(/,/g, ''));
+    const rest = (segment.slice(0, m.index) + ' ' + segment.slice(m.index + m[0].length)).trim();
+    return { amount, rest };
+  }
+  m = segment.match(/\b(\d+(?:\.\d{1,2})?)\b/);
+  if (m) {
+    const amount = parseFloat(m[1]);
+    const rest = (segment.slice(0, m.index) + ' ' + segment.slice(m.index + m[0].length)).trim();
+    return { amount, rest };
+  }
+  return null;
+}
+function cfoSplitSegments(text) {
+  return text.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
+}
+function cfoParseSegment(segment, learned) {
+  const extracted = cfoExtractAmount(segment);
+  if (!extracted || !(extracted.amount > 0)) {
+    return { rawText: segment, amount: null, note: segment, category: "Other / Miscellaneous",
+             type: "Expense", confidence: 0, error: 'No amount found' };
+  }
+  const note = extracted.rest.replace(/\s+/g, ' ').replace(/^(for|on|to)\s+/i, '').trim();
+  const { category, confidence } = cfoGuessCategory(segment, learned);
+  const type = cfoCatInfo(category).type;
+  return { rawText: segment, amount: extracted.amount, note: note || segment,
+           category, type, confidence, error: null };
+}
+function cfoParseInput(text, learned) {
+  return cfoSplitSegments(text).map(s => cfoParseSegment(s, learned));
+}
+
+/* =========================================================================
    App state + render
    ========================================================================= */
 
@@ -493,6 +619,15 @@ const state = {
   compliance: safeGet(LS.compliance, {}),
   genProductId: null,
   genDuration: 15,
+  cfo: {
+    status: null,      // last response from /api/cfo/status
+    loading: false,
+    error: null,
+    pending: [],        // parsed, not-yet-saved candidates
+    saving: false,
+    learned: safeGet(LS.cfoLearned, {}),
+    offlineQueue: safeGet(LS.cfoQueue, []),
+  },
 };
 if (!state.plan || state.plan.weekStart !== mondayOfISO(todayISO())) {
   state.plan = emptyPlan(mondayOfISO(todayISO()));
@@ -519,6 +654,7 @@ function render() {
 
   if (state.tab === 'dashboard') renderDashboard();
   if (state.tab === 'tiktok') renderTikTok();
+  if (state.tab === 'cfo') renderCFO();
 }
 
 function renderDashboard() {
@@ -726,6 +862,200 @@ function renderTTCompliance() {
   `;
 }
 
+/* ---------- CFO tab render + network ---------- */
+
+async function fetchCFOStatus() {
+  state.cfo.loading = true; state.cfo.error = null; render();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch('/.netlify/functions/cfo-status', {
+      headers: { 'X-Telegram-Init-Data': tg ? tg.initData : '' },
+      signal: controller.signal,
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || `Server responded ${res.status}`);
+    state.cfo.status = body;
+  } catch (e) {
+    state.cfo.error = e.message || 'Could not reach the CFO backend.';
+  } finally {
+    clearTimeout(timer);
+    state.cfo.loading = false;
+    render();
+  }
+}
+
+function cfoPendingItemHTML(p, i) {
+  const opts = CFO_CATEGORY_NAMES.map(n =>
+    `<option value="${esc(n)}" ${n === p.category ? 'selected' : ''}>${esc(n)}</option>`).join('');
+  const info = cfoCatInfo(p.category);
+  const typeBadge = `<span class="pill ${info.type === 'Income' ? 'ok' : 'bad'}">${info.type}</span>`;
+  const reviewBadge = p.confidence < 0.5 ? `<span class="pill warn">check category</span>` : '';
+  const dupBadge = p.duplicate ? `<span class="pill warn">possible duplicate</span>` : '';
+  const errorLine = p.error ? `<div style="color:var(--bad);font-size:11.5px;margin-top:4px">⚠ ${esc(p.error)} — edit amount below</div>` : '';
+  return `
+    <div class="list-item" data-pending-index="${i}">
+      <div class="top">
+        <div class="name">${p.amount != null ? esc(fmtRM(p.amount)) : '—'}</div>
+        <div>${typeBadge}${reviewBadge}${dupBadge}</div>
+      </div>
+      <div class="meta">"${esc(p.rawText)}"</div>
+      ${errorLine}
+      <input type="number" step="0.01" min="0" placeholder="Amount (RM)" style="margin-top:8px"
+        value="${p.amount != null ? p.amount : ''}" data-action="cfo-edit-amount" data-index="${i}">
+      <select data-action="cfo-edit-category" data-index="${i}" style="margin-top:6px">${opts}</select>
+      <input type="text" placeholder="Note" style="margin-top:6px" value="${esc(p.note)}"
+        data-action="cfo-edit-note" data-index="${i}">
+      <button class="btn secondary small" style="margin-top:8px" data-action="cfo-remove-pending" data-index="${i}">Remove this line</button>
+    </div>`;
+}
+
+function renderCFO() {
+  const el = document.getElementById('cfo-content');
+  const c = state.cfo;
+
+  if (c.loading && !c.status) { el.innerHTML = `<div class="empty">Loading…</div>`; return; }
+  if (c.error && !c.status) {
+    el.innerHTML = `
+      <div class="card warn">
+        <div class="card-title">⚠️ Couldn't reach the CFO backend</div>
+        <p style="font-size:12.5px;margin-bottom:10px">${esc(c.error)}</p>
+        <p style="font-size:11.5px;color:var(--muted);margin-bottom:10px">If this is the first run, the Netlify service account and env vars (TELEGRAM_BOT_TOKEN, GOOGLE_SERVICE_ACCOUNT_KEY) likely aren't set up yet.</p>
+        <button class="btn small" data-action="cfo-retry">Retry</button>
+      </div>`;
+    return;
+  }
+
+  const s = c.status || { income: 0, expense: 0, balance: 0, byCategory: {}, budgets: {}, recent: [] };
+  const pendingHTML = c.pending.length ? `
+    <div>${c.pending.map(cfoPendingItemHTML).join('')}</div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn secondary" data-action="cfo-cancel-pending">Cancel</button>
+      <button class="btn block" data-action="cfo-save-pending">${c.saving ? 'Saving…' : 'Save all'}</button>
+    </div>` : '';
+
+  const breakdownRows = Object.entries(s.byCategory)
+    .sort(([, a], [, b]) => b - a)
+    .map(([cat, amount]) => {
+      const budget = s.budgets && s.budgets[cat];
+      const pct = budget ? Math.min(100, Math.round((amount / budget) * 100)) : 0;
+      return `
+      <div style="margin-bottom:12px">
+        <div class="row" style="justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:12px;color:var(--sub)">${esc(cat)}</span>
+          <span style="font-size:12px;font-weight:600">${esc(fmtRM(amount))}${budget ? ` / ${esc(fmtRM(budget))}` : ''}</span>
+        </div>
+        ${budget ? `<div style="width:100%;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+          <div style="width:${pct}%;height:100%;background:${amount > budget ? 'var(--bad)' : 'var(--accent)'}"></div></div>` : ''}
+      </div>`;
+    }).join('');
+
+  const recentRows = (s.recent || []).map(t => `
+    <div class="list-item">
+      <div class="top">
+        <div>
+          <div class="name">${esc(t.category)}</div>
+          <div class="meta">${esc(t.date)}${t.note ? ' · ' + esc(t.note) : ''}</div>
+        </div>
+        <div style="font-weight:700;color:${t.type === 'Income' ? 'var(--good)' : 'var(--accent)'}">${t.type === 'Income' ? '+' : '−'}${esc(fmtRM(t.amount))}</div>
+      </div>
+    </div>`).join('');
+
+  const queueLen = c.offlineQueue.length;
+
+  el.innerHTML = `
+    <div class="card blue">
+      <div class="card-title">💰 This month</div>
+      <div class="stat-row">
+        <div class="stat"><div class="v" style="color:var(--good)">${esc(fmtRM(s.income))}</div><div class="l">Income</div></div>
+        <div class="stat"><div class="v">${esc(fmtRM(s.expense))}</div><div class="l">Expenses</div></div>
+      </div>
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(0,0,0,.05);font-size:13px">
+        <b>Balance:</b> <span style="color:${s.balance >= 0 ? 'var(--good)' : 'var(--bad)'};font-weight:700">${esc(fmtRM(s.balance))}</span>
+      </div>
+    </div>
+
+    ${queueLen ? `<div class="flag" style="margin-bottom:12px">⚠ ${queueLen} transaction(s) saved offline — will sync automatically once the backend is reachable.</div>` : ''}
+
+    <div class="section-title">Add transaction(s)</div>
+    <div class="card">
+      <textarea id="cfo-capture-input" placeholder="dinner rm10, telur rm12&#10;received salary 1900"></textarea>
+      <button class="btn block" style="margin-top:8px" data-action="cfo-parse-input">Parse</button>
+      ${pendingHTML}
+    </div>
+
+    <div class="section-title">Spending by category</div>
+    ${breakdownRows || `<div class="empty">Nothing logged this month yet.</div>`}
+
+    <div class="section-title">Recent transactions</div>
+    ${recentRows || `<div class="empty">No transactions yet.</div>`}
+  `;
+}
+
+function doCFOParseInput() {
+  const textarea = document.getElementById('cfo-capture-input');
+  const text = textarea.value.trim();
+  if (!text) return;
+  const pending = cfoParseInput(text, state.cfo.learned);
+  const todays = (state.cfo.status && state.cfo.status.today) || [];
+  state.cfo.pending = cfoFlagDuplicates(pending, todays);
+  render();
+}
+function doCFORemovePending(i) { state.cfo.pending.splice(i, 1); render(); }
+function doCFOCancelPending() { state.cfo.pending = []; render(); }
+
+async function doCFOSavePending() {
+  if (state.cfo.saving) return;
+  const bad = state.cfo.pending.filter(p => !(p.amount > 0));
+  if (bad.length) { toast('Fix the amount on the highlighted line(s) first.'); return; }
+  if (!state.cfo.pending.length) return;
+
+  const today = todayISO();
+  const batch = state.cfo.pending.map(p => ({ date: today, category: p.category, amount: p.amount, note: p.note }));
+
+  state.cfo.saving = true; render();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  let queued = false;
+  try {
+    const res = await fetch('/.netlify/functions/cfo-save', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ initData: tg ? tg.initData : '', transactions: batch }),
+      signal: controller.signal,
+    });
+    if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.error || `Server responded ${res.status}`); }
+    toast('Saved to your sheet.');
+  } catch (e) {
+    queued = true;
+    state.cfo.offlineQueue = state.cfo.offlineQueue.concat(batch);
+    safeSet(LS.cfoQueue, state.cfo.offlineQueue);
+    toast('Saved offline — will sync once the backend is reachable.');
+  } finally {
+    clearTimeout(timer);
+  }
+
+  state.cfo.pending = [];
+  document.getElementById('cfo-capture-input') && (document.getElementById('cfo-capture-input').value = '');
+  state.cfo.saving = false;
+  if (!queued) await fetchCFOStatus(); else render();
+}
+
+async function flushCFOQueue() {
+  if (!state.cfo.offlineQueue.length) return;
+  const batch = state.cfo.offlineQueue;
+  try {
+    const res = await fetch('/.netlify/functions/cfo-save', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ initData: tg ? tg.initData : '', transactions: batch }),
+    });
+    if (!res.ok) return;
+    state.cfo.offlineQueue = [];
+    safeSet(LS.cfoQueue, []);
+    toast(`Synced ${batch.length} queued transaction(s).`);
+    if (state.tab === 'cfo') await fetchCFOStatus(); else render();
+  } catch (e) { /* still offline — leave the queue as-is */ }
+}
+
 /* ---------- toast ---------- */
 let toastTimer = null;
 function toast(msg) {
@@ -777,7 +1107,11 @@ document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-action]');
   if (!el) return;
   const a = el.dataset.action;
-  if (a === 'switch-tab') { state.tab = el.dataset.tab; render(); }
+  if (a === 'switch-tab') {
+    state.tab = el.dataset.tab;
+    render();
+    if (state.tab === 'cfo' && !state.cfo.status && !state.cfo.loading) fetchCFOStatus();
+  }
   else if (a === 'tt-subtab') { state.ttSubtab = el.dataset.sub; render(); }
   else if (a === 'add-product') doAddProduct();
   else if (a === 'remove-product') doRemoveProduct(el.dataset.id);
@@ -787,6 +1121,22 @@ document.addEventListener('click', (e) => {
     safeSet(LS.compliance, state.compliance);
     toast('Marked reviewed.');
     render();
+  }
+  else if (a === 'cfo-retry') fetchCFOStatus();
+  else if (a === 'cfo-parse-input') doCFOParseInput();
+  else if (a === 'cfo-save-pending') doCFOSavePending();
+  else if (a === 'cfo-cancel-pending') doCFOCancelPending();
+  else if (a === 'cfo-remove-pending') doCFORemovePending(Number(el.dataset.index));
+});
+
+document.addEventListener('input', (e) => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const a = el.dataset.action;
+  if (a === 'cfo-edit-amount') {
+    state.cfo.pending[Number(el.dataset.index)].amount = el.value === '' ? null : parseFloat(el.value);
+  } else if (a === 'cfo-edit-note') {
+    state.cfo.pending[Number(el.dataset.index)].note = el.value;
   }
 });
 
@@ -812,6 +1162,15 @@ document.addEventListener('change', (e) => {
     state.genProductId = el.value; render();
   } else if (a === 'gen-duration') {
     state.genDuration = Number(el.value) || 15; render();
+  } else if (a === 'cfo-edit-category') {
+    const i = Number(el.dataset.index);
+    const p = state.cfo.pending[i];
+    p.category = el.value;
+    p.type = cfoCatInfo(el.value).type;
+    p.confidence = 1; // user-confirmed
+    cfoLearnFromCorrection(p.rawText, el.value, state.cfo.learned);
+    safeSet(LS.cfoLearned, state.cfo.learned);
+    render();
   }
 });
 
@@ -825,5 +1184,9 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('./service-worker.js').catch(() => {});
   });
 }
+if (typeof window !== 'undefined' && window.addEventListener) {
+  window.addEventListener('online', flushCFOQueue);
+}
+flushCFOQueue();
 render();
 </script>
