@@ -111,12 +111,12 @@
 
   <!-- YOUTUBE TAB -->
   <section id="view-youtube" class="hidden">
-    <div class="empty">YouTube Analyzer is priority #4 — not built yet. Views/subscribers need only an API key; Click-Through Rate and Watch Time need a one-time OAuth consent (can't be done inside Telegram's WebView) — we'll confirm that trade-off when we get here.</div>
+    <div class="empty">Deferred — no YouTube channel to analyze yet. Ask for this tab once there's one.</div>
   </section>
 
   <!-- BIBLE TAB -->
   <section id="view-bible" class="hidden">
-    <div class="empty">Daily Bible (Renungan) is last in the build order — not built yet.</div>
+    <div id="bible-content"></div>
   </section>
 </main>
 
@@ -167,6 +167,7 @@ const LS = {
   compliance: 'pmgr_tt_compliance_v1',
   cfoLearned: 'pmgr_cfo_learned_v1',
   cfoQueue: 'pmgr_cfo_offline_queue_v1',
+  bibleChecks: 'pmgr_bible_checks_v1',
 };
 function safeGet(key, fallback) {
   try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }
@@ -607,11 +608,83 @@ function cfoParseInput(text, learned) {
 }
 
 /* =========================================================================
+   Daily Bible (Renungan) — static Catholic reflection content
+
+   Not AI-generated, not dynamic: a fixed, hand-written set of verse +
+   reflection pairs, and a fixed reading plan (Gospel of Matthew, one
+   chapter per weekday, Sunday reserved for reflection instead of reading).
+   Both are selected deterministically from the date, so "today's" content
+   is stable and repeats on a cycle rather than being random or generated
+   at runtime. Only interactivity: checking off a reading-plan day
+   (localStorage), per spec.
+   ========================================================================= */
+
+const BIBLE_REFLECTIONS = [
+  { verse: "Trust in the Lord with all your heart, and lean not on your own understanding.", ref: "Proverbs 3:5–6",
+    reflection: "Some days the plan makes sense and some days it doesn't — this verse isn't asking for the second kind to feel like the first. It's asking for trust to hold anyway." },
+  { verse: "Do not be anxious about anything, but in every situation, by prayer and petition, with thanksgiving, present your requests to God.", ref: "Philippians 4:6",
+    reflection: "Worry rehearses the problem; this verse asks for the same energy to go into naming it to God instead, with thanks already mixed in, not saved for after it's resolved." },
+  { verse: "Peace I leave with you; my peace I give you. I do not give to you as the world gives.", ref: "John 14:27",
+    reflection: "The world's peace usually means nothing's wrong yet. This is a peace meant to hold even while something is." },
+  { verse: "Consider it pure joy, my brothers and sisters, whenever you face trials of many kinds, because you know that the testing of your faith produces perseverance.", ref: "James 1:2–4",
+    reflection: "Not joy that the trial is fun — joy that it isn't wasted. Perseverance is built, not born, and it's built in exactly the weeks that don't feel like it." },
+  { verse: "Love is patient, love is kind. It does not envy, it does not boast, it is not proud.", ref: "1 Corinthians 13:4–7",
+    reflection: "Read as a checklist it's convicting; read as a description of how God already loves you, it's a relief. Try to let today's version of love borrow a little of that." },
+  { verse: "He has shown you, O mortal, what is good. And what does the Lord require of you? To act justly and to love mercy and to walk humbly with your God.", ref: "Micah 6:8",
+    reflection: "Three things, not thirty. On a day with no time for more, this is still not too much to aim for." },
+  { verse: "Bear with each other and forgive one another if any of you has a grievance against someone. Forgive as the Lord forgave you.", ref: "Colossians 3:13",
+    reflection: "The standard isn't 'forgive once it stops hurting' — it's 'forgive the way you were forgiven,' which happened before you'd earned it either." },
+  { verse: "May the God of hope fill you with all joy and peace as you trust in him, so that you may overflow with hope by the power of the Holy Spirit.", ref: "Romans 15:13",
+    reflection: "Hope here isn't optimism that things will work out — it's a person to trust, which is a steadier thing to stand on than a feeling." },
+  { verse: "You, my brothers and sisters, were called to be free. But do not use your freedom to indulge the flesh; rather, serve one another humbly in love.", ref: "Galatians 5:13",
+    reflection: "Freedom that only serves itself gets small fast. The same freedom turned toward someone else's actual need is where it was headed all along." },
+  { verse: "Rejoice always, pray continually, give thanks in all circumstances; for this is God's will for you in Christ Jesus.", ref: "1 Thessalonians 5:16–18",
+    reflection: "Three short instructions for an ordinary day, not a spiritual retreat. They fit around dinner, a commute, a hard conversation — that's the point." },
+  { verse: "But those who hope in the Lord will renew their strength. They will soar on wings like eagles; they will run and not grow weary.", ref: "Isaiah 40:31",
+    reflection: "Renewed, not manufactured — the strength for today isn't something to grit out of nothing, it's something to receive." },
+  { verse: "Come to me, all you who are weary and burdened, and I will give you rest.", ref: "Matthew 11:28",
+    reflection: "Not 'come once you've earned a break' — come tired, and let that be the qualifying condition, not a disqualifying one." },
+];
+
+function dayOfYear(date) {
+  const start = new Date(date.getFullYear(), 0, 0);
+  return Math.floor((date - start) / 86400000);
+}
+function reflectionFor(date) {
+  return BIBLE_REFLECTIONS[dayOfYear(date) % BIBLE_REFLECTIONS.length];
+}
+
+// Simple weekday reading plan: one chapter of Matthew (28 chapters) per
+// weekday (Mon-Sat), cycling once the book is finished; Sunday is a
+// reflection day, not a reading day, matching the mockup's "Sunday -
+// Reflection" row.
+const READING_BOOK = 'Matthew';
+const READING_TOTAL_CHAPTERS = 28;
+const READING_EPOCH = new Date(2026, 0, 5); // a Monday, week 0 day 0 of the cycle
+function readingPlanForWeek(date) {
+  const monday = new Date(date);
+  const dow = monday.getDay(); // 0=Sun..6=Sat
+  monday.setDate(monday.getDate() + (dow === 0 ? -6 : 1 - dow));
+  const weekIndex = Math.floor((monday - READING_EPOCH) / (7 * 86400000));
+  return DOW.map((label, i) => {
+    const d = new Date(monday); d.setDate(d.getDate() + i);
+    const iso = todayISOFor(d);
+    if (label === 'Sun') return { dow: label, iso, label: 'Reflection', isReading: false };
+    const chapterIndex = (((weekIndex * 6 + i) % READING_TOTAL_CHAPTERS) + READING_TOTAL_CHAPTERS) % READING_TOTAL_CHAPTERS;
+    return { dow: label, iso, label: `${READING_BOOK} ${chapterIndex + 1}`, isReading: true };
+  });
+}
+function todayISOFor(d) {
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/* =========================================================================
    App state + render
    ========================================================================= */
 
 const state = {
-  tab: 'tiktok', // TikTok is the built tab this pass — land there, not an empty Dashboard
+  tab: 'dashboard',
   ttSubtab: 'plan',
   products: safeGet(LS.products, []),
   plan: safeGet(LS.plan, null),
@@ -628,6 +701,9 @@ const state = {
     learned: safeGet(LS.cfoLearned, {}),
     offlineQueue: safeGet(LS.cfoQueue, []),
   },
+  bible: {
+    checks: safeGet(LS.bibleChecks, {}), // { isoDate: true }
+  },
 };
 if (!state.plan || state.plan.weekStart !== mondayOfISO(todayISO())) {
   state.plan = emptyPlan(mondayOfISO(todayISO()));
@@ -636,9 +712,9 @@ if (!state.plan || state.plan.weekStart !== mondayOfISO(todayISO())) {
 const HEADER = {
   dashboard: ['Dashboard', () => new Date().toLocaleDateString('en-MY', { month: 'short', day: 'numeric', year: 'numeric' })],
   tiktok: ['TikTok Affiliate Hub', () => '@ultramain · TikTok Shop Creator'],
-  cfo: ['Personal CFO', () => ''],
+  cfo: ['Personal CFO', () => new Date().toLocaleDateString('en-MY', { month: 'long', year: 'numeric' })],
   youtube: ['YouTube Analyzer', () => ''],
-  bible: ['Daily Renungan', () => ''],
+  bible: ['Daily Renungan', () => 'Catholic Daily Reflection'],
 };
 
 function render() {
@@ -655,21 +731,62 @@ function render() {
   if (state.tab === 'dashboard') renderDashboard();
   if (state.tab === 'tiktok') renderTikTok();
   if (state.tab === 'cfo') renderCFO();
+  if (state.tab === 'bible') renderBible();
+}
+
+// Last-7-days views/engagements across all products, for the Dashboard's
+// TikTok snapshot card — deliberately not gated by the 7-day "settled"
+// rule (that rule is about trusting a single video's numbers for
+// hook-attribution insights; a rough week-over-week total is fine to show
+// immediately).
+function weeklyPerfSnapshot(perf, today) {
+  const cutoff = today || todayISO();
+  return perf.reduce((acc, e) => {
+    if (daysBetween(e.date, cutoff) > 7) return acc;
+    acc.views += e.views;
+    acc.engagements += e.likes + e.comments + e.shares;
+    return acc;
+  }, { views: 0, engagements: 0 });
 }
 
 function renderDashboard() {
   const cs = complianceStatus(state.compliance);
+  const tt = weeklyPerfSnapshot(state.perf, todayISO());
+  const cfoStatus = state.cfo.status;
+  const r = reflectionFor(new Date());
+
   document.getElementById('view-dashboard').innerHTML = `
     <div class="card accent">
-      <div class="card-title">🎵 TikTok — Compliance</div>
-      <span class="pill ${cs.status === 'ok' ? 'ok' : 'warn'}">${cs.status === 'ok' ? 'Reviewed recently' : 'Needs review'}</span>
-      <p style="margin:10px 0 0;font-size:12px;color:var(--sub)">
-        ${state.compliance.lastChecked ? `Last checked ${esc(state.compliance.lastChecked)} (${cs.days}d ago)` : 'Never checked — see the TikTok tab’s Compliance section.'}
-      </p>
+      <div class="card-title">🎵 TikTok this week</div>
+      <div class="stat-row">
+        <div class="stat"><div class="v">${tt.views.toLocaleString()}</div><div class="l">Total views</div></div>
+        <div class="stat"><div class="v">${tt.engagements.toLocaleString()}</div><div class="l">Engagements</div></div>
+      </div>
+      <div style="margin-top:10px">
+        <span class="pill ${cs.status === 'ok' ? 'ok' : 'warn'}">${cs.status === 'ok' ? 'Compliance reviewed recently' : 'Compliance needs review'}</span>
+      </div>
     </div>
+
+    <div class="card good">
+      <div class="card-title">💰 This month</div>
+      ${cfoStatus ? `
+        <div class="stat-row">
+          <div class="stat"><div class="v" style="color:var(--good)">${esc(fmtRM(cfoStatus.income))}</div><div class="l">Income</div></div>
+          <div class="stat"><div class="v">${esc(fmtRM(cfoStatus.expense))}</div><div class="l">Expenses</div></div>
+        </div>
+        <p style="margin-top:10px;font-size:12px;color:var(--sub)"><b>Balance:</b> ${esc(fmtRM(cfoStatus.balance))}</p>
+      ` : `<p style="font-size:12px;color:var(--muted);margin-bottom:8px">Not loaded yet.</p><button class="btn small" data-action="dash-load-cfo">Load CFO summary</button>`}
+    </div>
+
+    <div class="card blue">
+      <div class="card-title">✝️ Daily Renungan</div>
+      <p style="font-size:12px;color:var(--sub);line-height:1.5;margin-bottom:6px">"${esc(r.verse.length > 90 ? r.verse.slice(0, 87) + '…' : r.verse)}"</p>
+      <div style="font-size:11px;color:var(--muted)">${esc(r.ref)}</div>
+    </div>
+
     <div class="card">
-      <div class="card-title">💰 CFO · ▶️ YouTube · ✝️ Bible</div>
-      <p style="font-size:12px;color:var(--muted)">These summary cards land once each tab is built (build order: CFO next, then YouTube, then Bible).</p>
+      <div class="card-title">▶️ YouTube</div>
+      <p style="font-size:12px;color:var(--muted)">Deferred — no channel to analyze yet.</p>
     </div>
   `;
 }
@@ -1056,6 +1173,36 @@ async function flushCFOQueue() {
   } catch (e) { /* still offline — leave the queue as-is */ }
 }
 
+/* ---------- Bible tab render ---------- */
+
+function renderBible() {
+  const today = new Date();
+  const r = reflectionFor(today);
+  const plan = readingPlanForWeek(today);
+  const rows = plan.map(day => {
+    const done = !!state.bible.checks[day.iso];
+    const isToday = day.iso === todayISOFor(today);
+    return `
+      <label class="row" style="justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);${isToday ? 'font-weight:600' : ''}">
+        <span style="font-size:12.5px;color:${day.isReading ? 'var(--body)' : 'var(--muted)'}">${day.dow} — ${esc(day.label)}${isToday ? ' (today)' : ''}</span>
+        <input type="checkbox" data-action="bible-toggle" data-iso="${day.iso}" ${done ? 'checked' : ''} style="width:auto">
+      </label>`;
+  }).join('');
+
+  document.getElementById('bible-content').innerHTML = `
+    <div class="card" style="background:linear-gradient(135deg,#fafafa,#fff);text-align:center;padding:28px 20px">
+      <p style="font-size:16px;line-height:1.6;font-weight:500;margin-bottom:10px">"${esc(r.verse)}"</p>
+      <p style="font-size:11.5px;color:var(--accent);font-weight:700;letter-spacing:.03em">${esc(r.ref)}</p>
+    </div>
+    <div class="section-title">Today's reflection</div>
+    <div class="card" style="border-left:3px solid var(--accent);font-size:12.5px;line-height:1.6;color:var(--body)">
+      ${esc(r.reflection)}
+    </div>
+    <div class="section-title">This week's reading — ${esc(READING_BOOK)}</div>
+    <div class="card">${rows}</div>
+  `;
+}
+
 /* ---------- toast ---------- */
 let toastTimer = null;
 function toast(msg) {
@@ -1127,6 +1274,7 @@ document.addEventListener('click', (e) => {
   else if (a === 'cfo-save-pending') doCFOSavePending();
   else if (a === 'cfo-cancel-pending') doCFOCancelPending();
   else if (a === 'cfo-remove-pending') doCFORemovePending(Number(el.dataset.index));
+  else if (a === 'dash-load-cfo') fetchCFOStatus();
 });
 
 document.addEventListener('input', (e) => {
@@ -1171,6 +1319,10 @@ document.addEventListener('change', (e) => {
     cfoLearnFromCorrection(p.rawText, el.value, state.cfo.learned);
     safeSet(LS.cfoLearned, state.cfo.learned);
     render();
+  } else if (a === 'bible-toggle') {
+    if (el.checked) state.bible.checks[el.dataset.iso] = true;
+    else delete state.bible.checks[el.dataset.iso];
+    safeSet(LS.bibleChecks, state.bible.checks);
   }
 });
 
@@ -1188,5 +1340,6 @@ if (typeof window !== 'undefined' && window.addEventListener) {
   window.addEventListener('online', flushCFOQueue);
 }
 flushCFOQueue();
+fetchCFOStatus(); // warms the Dashboard's CFO card even if the user never opens the CFO tab directly
 render();
 </script>

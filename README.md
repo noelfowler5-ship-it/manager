@@ -8,8 +8,8 @@ benefit at solo-user scale).
 
 ## Status
 
-**Built: TikTok Affiliate Hub, Personal CFO.** Dashboard/YouTube/Bible are
-still placeholder panels, in build-priority order:
+**Built: TikTok Affiliate Hub, Personal CFO, Dashboard, Daily Bible.**
+YouTube is intentionally skipped, not just unbuilt:
 
 1. ✅ **TikTok Affiliate Hub** — see below.
 2. ✅ **Personal CFO** — reads/writes the real `± money` combined sheet
@@ -17,13 +17,21 @@ still placeholder panels, in build-priority order:
    account, since Telegram's in-app WebView blocks Google's own OAuth sign-in
    screen (the pattern `pm-money` itself uses in a real browser). One-time
    setup: [`CFO_SETUP.md`](CFO_SETUP.md).
-3. ⬜ **Dashboard** — home tab, summary cards pulling from the other four.
-4. ⬜ **YouTube Analyzer** — views/subscribers need only a free API key;
-   Click-Through Rate/Watch Time need a one-time OAuth consent done in a real
-   mobile browser (same WebView block as Sheets), with the refresh token kept
-   server-side. Confirm that trade-off is worth it before building it.
-5. ⬜ **Daily Bible (Renungan)** — static content + `localStorage` checkmarks,
-   no server.
+3. ✅ **Dashboard** — home tab, is also the default landing tab now. Summary
+   cards for TikTok (last-7-days views/engagements + compliance status) and
+   CFO (this month's income/expenses/balance, fetched automatically at
+   launch) pull real numbers; the Bible card shows today's verse. YouTube's
+   card stays a plain "deferred" note.
+4. 🚫 **YouTube Analyzer** — deliberately skipped: there's no YouTube channel
+   to analyze yet. Revisit once there is one; the trade-off between an
+   API-key-only build (views/subscribers/growth) and adding OAuth for
+   Click-Through Rate/Watch Time (one-time consent in a real mobile browser,
+   refresh token kept server-side) is still open.
+5. ✅ **Daily Bible (Renungan)** — hand-written, not AI-generated: 12 fixed
+   verse+reflection pairs selected deterministically by day-of-year (repeats
+   on a cycle, not random), plus a Gospel-of-Matthew reading plan (one
+   chapter per weekday, Sunday reserved for reflection) with a
+   check-off-the-day checklist in `localStorage`. No server.
 
 ## TikTok Affiliate Hub
 
@@ -81,6 +89,24 @@ Google service account rather than the interactive Google sign-in the
   back online — never silently lost, never silently duplicated on retry.
 
 Setup (service account, env vars): [`CFO_SETUP.md`](CFO_SETUP.md).
+
+## Dashboard
+
+The default landing tab. Pulls real numbers from whichever tabs have data —
+no separate mock numbers to keep in sync. CFO's summary is fetched once at
+app launch (not only when the CFO tab is opened) so the card isn't blank on
+the tab you actually land on; if that fetch hasn't resolved yet (or failed),
+the card shows a "Load CFO summary" button instead of a misleading zero.
+
+## Daily Bible (Renungan)
+
+Static content, not generated at request time — both the daily
+verse/reflection and the reading plan are selected deterministically from
+the calendar date (day-of-year for the reflection, week-since-a-fixed-Monday
+for the reading plan), so "today's" content is the same if you check it
+five times and cycles forward tomorrow rather than repeating or randomizing.
+The only interactivity is checking off a reading-plan day, stored in
+`localStorage` — no AI calls, no server.
 
 ## Running it
 

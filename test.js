@@ -159,5 +159,47 @@ ok(pending[0].duplicate === false, 'a different amount is not flagged');
   ok(html('#cfo-content').includes('saved offline'), 'CFO tab surfaces the offline-queue state to the user');
   `, 'cfo-verify');
 
+  app.run(`
+  section('Bible — reflection selection is deterministic');
+  const d1 = new Date(2026, 7, 30), d2 = new Date(2026, 7, 30);
+  ok(reflectionFor(d1) === reflectionFor(d2), 'the same calendar date always returns the same reflection object');
+  ok(BIBLE_REFLECTIONS.every(r => r.verse && r.ref && r.reflection), 'every reflection has a verse, reference, and reflection paragraph');
+
+  section('Bible — reading plan');
+  const week = readingPlanForWeek(new Date(2026, 7, 30)); // a Sunday
+  ok(week.length === 7, 'reading plan covers all 7 days: got ' + week.length);
+  ok(week[6].dow === 'Sun' && week[6].label === 'Reflection' && week[6].isReading === false, 'Sunday is a reflection day, not a reading day: got ' + JSON.stringify(week[6]));
+  const readingDays = week.slice(0, 6);
+  ok(readingDays.every(d => d.isReading && /^Matthew \\d+$/.test(d.label)), 'Mon-Sat are all chapter readings from Matthew: got ' + JSON.stringify(readingDays.map(d => d.label)));
+  ok(readingDays.every(d => { const n = Number(d.label.split(' ')[1]); return n >= 1 && n <= 28; }), 'every assigned chapter number is within Matthew\\'s 28 chapters');
+  const uniqueChapters = new Set(readingDays.map(d => d.label));
+  ok(uniqueChapters.size === 6, 'the 6 reading days in one week are 6 distinct chapters, not repeats: got ' + uniqueChapters.size);
+
+  section('Bible — render + check-off persists');
+  state.tab = 'bible';
+  render();
+  ok(html('#bible-content').includes(BIBLE_REFLECTIONS[dayOfYear(new Date()) % BIBLE_REFLECTIONS.length].ref), 'renders today\\'s actual reference');
+  ok(html('#bible-content').includes('Matthew'), 'renders the reading plan');
+  ok(!/undefined|NaN/.test(html('#bible-content')), 'no undefined/NaN leaked into the Bible tab');
+
+  const todayIso = todayISOFor(new Date());
+  state.bible.checks[todayIso] = true;
+  safeSet(LS.bibleChecks, state.bible.checks);
+  ok(safeGet(LS.bibleChecks, {})[todayIso] === true, 'checking a day off persists to localStorage');
+
+  section('Dashboard — pulls real numbers from the tabs that exist');
+  state.tab = 'dashboard';
+  state.perf = [{ productId: 'p1', hookType: 'question', date: todayISO(), views: 500, likes: 10, comments: 2, shares: 1 }];
+  state.cfo.status = { income: 1000, expense: 400, balance: 600, byCategory: {}, budgets: {}, recent: [] };
+  render();
+  ok(html('#view-dashboard').includes('500'), 'dashboard shows this week\\'s TikTok view count');
+  ok(html('#view-dashboard').includes(fmtRM(600)), 'dashboard shows the real CFO balance once loaded: expected ' + fmtRM(600));
+  ok(!/undefined|NaN/.test(html('#view-dashboard')), 'no undefined/NaN leaked into the dashboard');
+
+  state.cfo.status = null;
+  render();
+  ok(html('#view-dashboard').includes('Load CFO summary'), 'dashboard prompts to load CFO data when it has not been fetched yet, instead of showing blank/zero numbers');
+  `, 'bible-dashboard');
+
   app.done();
 })();

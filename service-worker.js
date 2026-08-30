@@ -1,4 +1,4 @@
-const CACHE_NAME = 'personal-manager-v2';
+const CACHE_NAME = 'personal-manager-v3';
 const PRECACHE = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', (event) => {
