@@ -1,710 +1,729 @@
-<title>Personal CFO</title>
+<title>Personal Manager</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f172a">
+<meta name="theme-color" content="#ffffff">
 <link rel="manifest" href="./manifest.json">
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   :root{
-    --bg:#0b1220; --panel:#111a2e; --panel2:#0f1830; --border:#22314f;
-    --text:#e7ecf7; --muted:#93a1c0; --accent:#5b8def; --accent2:#22c55e;
-    --warn:#f59e0b; --bad:#ef4444; --good:#22c55e;
-    --radius:14px;
+    --bg:#ffffff; --panel:#f8f8f8; --panel2:#fafafa; --border:#f0f0f0;
+    --text:#000000; --muted:#999999; --sub:#666666; --body:#333333;
+    --accent:#d97757; --accent-hover:#c1643f; --accent-bg:#fef5f0; --accent-border:#ffe8dc;
+    --good:#788c5d; --good-bg:#f0f9f5; --good-border:#dce8e3;
+    --blue:#6a9bcc; --blue-bg:#f5f9fe; --blue-border:#dce6f0;
+    --warn:#c9a82d; --warn-bg:#fdf8e8; --warn-border:#f0e5bd;
+    --bad:#a63244; --bad-bg:#fdf0f2;
+    --radius:12px;
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
-    font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;}
   body{padding-bottom:76px}
   .hidden{display:none !important}
-  header{position:sticky;top:0;z-index:5;background:rgba(11,18,32,.92);backdrop-filter:blur(6px);
-    border-bottom:1px solid var(--border);padding:14px 16px 10px}
-  header h1{margin:0;font-size:18px;font-weight:700;letter-spacing:.2px}
-  header p{margin:2px 0 0;color:var(--muted);font-size:12.5px}
-  main{max-width:640px;margin:0 auto;padding:14px 14px 24px}
-  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
-    padding:14px;margin-bottom:12px}
-  .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
-  .stat{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
-    padding:10px 8px;text-align:center}
-  .stat .v{font-size:16px;font-weight:700}
-  .stat .l{font-size:11px;color:var(--muted);margin-top:2px}
-  .stat.bad .v{color:var(--bad)} .stat.good .v{color:var(--good)}
-  textarea{width:100%;min-height:78px;background:var(--panel2);color:var(--text);
-    border:1px solid var(--border);border-radius:10px;padding:10px;font-size:15px;resize:vertical}
-  textarea:focus,input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
-  button{font:inherit;cursor:pointer}
-  .btn{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:10px 16px;
-    font-weight:600}
-  .btn.secondary{background:transparent;border:1px solid var(--border);color:var(--text)}
-  .btn.small{padding:6px 10px;font-size:13px;border-radius:8px}
-  .btn.block{width:100%}
+  header{padding:16px;background:var(--bg);border-bottom:1px solid var(--border)}
+  header h1{margin:0;font-size:24px;font-weight:600}
+  header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+  main{max-width:480px;margin:0 auto;padding:16px}
+  .card{background:var(--panel);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+  .card.accent{background:var(--accent-bg);border:1px solid var(--accent-border)}
+  .card.good{background:var(--good-bg);border:1px solid var(--good-border)}
+  .card.blue{background:var(--blue-bg);border:1px solid var(--blue-border)}
+  .card.warn{background:var(--warn-bg);border:1px solid var(--warn-border)}
+  .card-title{display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:14px;font-weight:600}
+  .stat-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .stat .v{font-size:24px;font-weight:700;color:var(--accent)}
+  .stat .l{font-size:12px;color:var(--muted);margin-top:2px}
+  .section-title{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;
+    color:var(--sub);margin:16px 0 10px}
+  .section-title:first-child{margin-top:0}
+  input,select,textarea{width:100%;padding:10px 12px;border:1px solid #e0e0e0;border-radius:8px;
+    font-size:13px;font-family:inherit;background:var(--bg);color:var(--text)}
+  textarea{resize:vertical;min-height:60px}
+  label{display:block;font-size:12px;color:var(--sub);margin-bottom:4px;font-weight:600}
+  .field{margin-bottom:12px}
   .row{display:flex;gap:8px}
   .row.wrap{flex-wrap:wrap}
-  .muted{color:var(--muted)}
-  .pending-item{border:1px solid var(--border);border-radius:10px;padding:10px;margin-top:8px;
-    background:var(--panel2)}
-  .pending-item .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
-  .pending-item .amt{font-weight:700;font-size:16px}
-  .pending-item .raw{color:var(--muted);font-size:12.5px;margin-top:2px}
-  .pending-item select,.pending-item input{width:100%;background:var(--bg);color:var(--text);
-    border:1px solid var(--border);border-radius:8px;padding:6px 8px;margin-top:6px;font-size:13.5px}
-  .badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:6px;
-    margin-left:6px;vertical-align:middle}
-  .badge.review{background:rgba(245,158,11,.18);color:var(--warn)}
-  .badge.income{background:rgba(34,197,94,.18);color:var(--good)}
-  .badge.expense{background:rgba(239,68,68,.14);color:#f87171}
-  table{width:100%;border-collapse:collapse;font-size:13px}
-  th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--border)}
-  th{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em}
-  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
-  .status-ok{color:var(--good)} .status-over{color:var(--bad);font-weight:700}
-  .group-head td{background:var(--panel2);font-weight:700;color:var(--muted)}
-  nav.tabbar{position:fixed;bottom:0;left:0;right:0;background:var(--panel);
-    border-top:1px solid var(--border);display:flex;z-index:5}
-  nav.tabbar button{flex:1;background:none;border:none;color:var(--muted);padding:10px 4px 8px;
-    font-size:11px;display:flex;flex-direction:column;align-items:center;gap:2px}
-  nav.tabbar button .ic{font-size:18px}
-  nav.tabbar button.active{color:var(--accent)}
-  .empty{color:var(--muted);text-align:center;padding:22px 10px;font-size:14px}
-  .section-title{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;
-    letter-spacing:.03em;margin:2px 0 8px}
-  .log-item{display:flex;justify-content:space-between;gap:10px;padding:8px 0;
-    border-bottom:1px solid var(--border)}
-  .log-item:last-child{border-bottom:none}
-  .log-item .cat{font-weight:600}
-  .log-item .meta{color:var(--muted);font-size:12px}
-  .log-item .amt{font-weight:700;white-space:nowrap}
-  .log-item .amt.income{color:var(--good)}
-  .toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);background:#1c2a4a;
-    border:1px solid var(--border);padding:9px 16px;border-radius:20px;font-size:13px;
-    box-shadow:0 6px 20px rgba(0,0,0,.4);z-index:20;opacity:0;pointer-events:none;
-    transition:opacity .2s}
+  button{font:inherit;cursor:pointer}
+  .btn{background:var(--accent);color:#fff;border:none;padding:12px 16px;border-radius:10px;
+    font-weight:600;font-size:13px}
+  .btn:hover{background:var(--accent-hover)}
+  .btn.secondary{background:var(--panel);color:var(--text);border:1px solid var(--border)}
+  .btn.small{padding:7px 12px;font-size:12px;border-radius:8px}
+  .btn.block{width:100%}
+  .empty{color:var(--muted);text-align:center;padding:24px 10px;font-size:13px}
+  .pill{display:inline-block;font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:20px}
+  .pill.ok{background:var(--good-bg);color:var(--good)}
+  .pill.warn{background:var(--warn-bg);color:var(--warn)}
+  .pill.bad{background:var(--bad-bg);color:var(--bad)}
+  .pill.muted{background:var(--panel);color:var(--muted)}
+  .list-item{background:var(--panel);border-radius:8px;padding:12px;margin-bottom:8px}
+  .list-item:last-child{margin-bottom:0}
+  .list-item .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .list-item .name{font-weight:600;font-size:13px}
+  .list-item .meta{color:var(--muted);font-size:11.5px;margin-top:2px}
+  .subtabs{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto}
+  .subtabs button{flex:none;padding:7px 12px;border-radius:20px;border:1px solid var(--border);
+    background:var(--bg);color:var(--sub);font-size:12px;font-weight:600;white-space:nowrap}
+  .subtabs button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .gen-block{border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px}
+  .gen-block .lang-label{font-size:10.5px;font-weight:700;color:var(--accent);text-transform:uppercase;
+    letter-spacing:.04em;margin-bottom:6px}
+  .gen-block pre{white-space:pre-wrap;font-family:inherit;font-size:12.5px;line-height:1.55;margin:0;color:var(--body)}
+  .flag{background:var(--bad-bg);color:var(--bad);border-radius:8px;padding:8px 10px;font-size:11.5px;
+    margin-top:8px;font-weight:600}
+  .plan-slot{border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px}
+  .plan-slot .dow{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase}
+  .checklist{display:flex;align-items:center;gap:6px;font-size:12px}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{text-align:left;padding:6px 4px;border-bottom:1px solid var(--border)}
+  th{color:var(--muted);font-weight:600;font-size:10.5px;text-transform:uppercase}
+  td.num,th.num{text-align:right}
+  nav.tabbar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--border);
+    display:flex;justify-content:space-around;align-items:center;padding:6px 0 8px;z-index:5}
+  nav.tabbar button{background:none;border:none;display:flex;flex-direction:column;align-items:center;
+    gap:3px;padding:6px 10px;color:var(--muted);font-size:10.5px}
+  nav.tabbar button .ic{font-size:22px}
+  nav.tabbar button.active{color:var(--accent);font-weight:600}
+  .toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);background:#191915;color:#fff;
+    padding:9px 16px;border-radius:20px;font-size:12.5px;box-shadow:0 6px 20px rgba(0,0,0,.25);
+    z-index:20;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;text-align:center}
   .toast.show{opacity:1}
-  .budget-row input{width:90px;text-align:right}
-  details.note summary{cursor:pointer;color:var(--muted);font-size:12.5px}
 </style>
 
 <header>
-  <h1>💰 Personal CFO</h1>
-  <p>Type what happened with your money. Everything else is automatic.</p>
+  <h1 id="header-title">Dashboard</h1>
+  <p id="header-subtitle"></p>
 </header>
 
 <main>
-
-  <!-- CAPTURE TAB -->
-  <section id="view-capture">
-    <div class="stat-row" id="dash-stats"></div>
-
-    <div class="card">
-      <div class="section-title">Add transaction(s)</div>
-      <textarea id="capture-input" placeholder="dinner rm10, telur rm12, apple rm12.50&#10;received salary 1900&#10;reload boost 50"></textarea>
-      <div class="row" style="margin-top:8px">
-        <button class="btn block" data-action="parse-input">Parse</button>
-      </div>
-      <div id="pending-list"></div>
-      <div id="pending-actions" class="row hidden" style="margin-top:10px">
-        <button class="btn secondary" data-action="cancel-pending">Cancel</button>
-        <button class="btn block" data-action="save-pending">Save all</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="section-title">Today</div>
-      <div id="today-log"></div>
-    </div>
-  </section>
-
-  <!-- LOG TAB -->
-  <section id="view-log" class="hidden">
-    <div class="card">
-      <div class="row wrap" style="justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div class="section-title" style="margin:0">Transaction log</div>
-        <button class="btn small secondary" data-action="export-csv">Export CSV</button>
-      </div>
-      <div id="full-log"></div>
-    </div>
-  </section>
-
-  <!-- BUDGET TAB -->
-  <section id="view-budget" class="hidden">
-    <div class="card">
-      <div class="section-title">Monthly budget plan</div>
-      <p class="muted" style="margin-top:-4px;font-size:12.5px">
-        Seeded from your real Google Sheet. Edit any target — it's saved on this device.
-      </p>
-      <div id="budget-editor"></div>
-    </div>
-  </section>
-
   <!-- DASHBOARD TAB -->
-  <section id="view-dashboard" class="hidden">
-    <div class="card">
-      <div class="section-title" id="dashboard-month-title">This month</div>
-      <div id="dashboard-summary"></div>
-    </div>
-    <div class="card">
-      <div class="section-title">Category breakdown — planned vs actual</div>
-      <div id="dashboard-breakdown"></div>
-    </div>
+  <section id="view-dashboard" class="hidden"></section>
+
+  <!-- TIKTOK TAB -->
+  <section id="view-tiktok" class="hidden">
+    <div class="subtabs" id="tiktok-subtabs"></div>
+    <div id="tiktok-content"></div>
   </section>
 
-  <!-- SYNC TAB -->
-  <section id="view-sync" class="hidden">
-    <div class="card">
-      <div class="section-title">Google Sheets sync</div>
-      <p class="muted" style="margin-top:-4px;font-size:12.5px">
-        Pushes new entries into your Transaction Log tab, without touching its
-        existing formulas. Nothing leaves your device except this sync call —
-        you're signing in to your own Google account, not ours.
-      </p>
-      <div id="sync-status"></div>
-      <div style="margin-top:10px">
-        <div class="section-title" style="font-size:11px">Spreadsheet ID</div>
-        <input type="text" id="sync-sheet-id" placeholder="the long ID from the sheet's URL"
-          data-action="edit-sheet-id" style="width:100%;background:var(--panel2);color:var(--text);
-          border:1px solid var(--border);border-radius:8px;padding:8px;font-size:13px">
-        <p class="muted" style="font-size:11.5px;margin:4px 0 0">
-          From the sheet's URL: docs.google.com/spreadsheets/d/<b>THIS PART</b>/edit
-        </p>
-      </div>
-      <div class="row" style="margin-top:12px">
-        <button class="btn secondary" data-action="google-signin" id="btn-google-signin">Connect Google</button>
-        <button class="btn block" data-action="sync-now" id="btn-sync-now" disabled>Sync now</button>
-      </div>
-    </div>
+  <!-- CFO TAB -->
+  <section id="view-cfo" class="hidden">
+    <div class="empty">Personal CFO is next up — it'll read/write the real ± money sheet through a Netlify service-account function. Not built yet.</div>
   </section>
 
+  <!-- YOUTUBE TAB -->
+  <section id="view-youtube" class="hidden">
+    <div class="empty">YouTube Analyzer is priority #4 — not built yet. Views/subscribers need only an API key; Click-Through Rate and Watch Time need a one-time OAuth consent (can't be done inside Telegram's WebView) — we'll confirm that trade-off when we get here.</div>
+  </section>
+
+  <!-- BIBLE TAB -->
+  <section id="view-bible" class="hidden">
+    <div class="empty">Daily Bible (Renungan) is last in the build order — not built yet.</div>
+  </section>
 </main>
 
 <nav class="tabbar">
-  <button data-action="switch-tab" data-tab="capture" class="active"><span class="ic">✍️</span>Capture</button>
-  <button data-action="switch-tab" data-tab="log"><span class="ic">📒</span>Log</button>
-  <button data-action="switch-tab" data-tab="budget"><span class="ic">🎯</span>Budget</button>
-  <button data-action="switch-tab" data-tab="dashboard"><span class="ic">📊</span>Dashboard</button>
-  <button data-action="switch-tab" data-tab="sync"><span class="ic">🔄</span>Sync</button>
+  <button data-action="switch-tab" data-tab="dashboard" class="active"><span class="ic">📊</span>Dashboard</button>
+  <button data-action="switch-tab" data-tab="tiktok"><span class="ic">🎵</span>TikTok</button>
+  <button data-action="switch-tab" data-tab="cfo"><span class="ic">💰</span>CFO</button>
+  <button data-action="switch-tab" data-tab="youtube"><span class="ic">▶️</span>YouTube</button>
+  <button data-action="switch-tab" data-tab="bible"><span class="ic">✝️</span>Bible</button>
 </nav>
 
 <div id="toast" class="toast"></div>
 
 <script>
 /* =========================================================================
-   Personal CFO — Phase 1 capture MVP
-   Category / Group / Type taxonomy and default budget targets are copied
-   verbatim from the user's real "Monthly Budget Plan" Google Sheet
-   (Reference Lists + Monthly Budget Plan tabs) so this app's categorization
-   matches the spreadsheet exactly. Phase 2 adds a Google Sheets sync using
-   this same taxonomy as the join key.
+   Personal Manager — Telegram Mini App (single user: Noel)
+
+   ONE Mini App, single index.html, client-side tab routing — deliberately
+   not five separate Mini Apps (rejected: janky navigation, 5x maintenance
+   at solo-user scale). Tabs: Dashboard, TikTok, CFO, YouTube, Bible — all
+   five always render in the nav bar even before their content is built.
+
+   Build order (don't reorder without asking): 1) TikTok Affiliate Hub
+   (this pass) 2) CFO 3) Dashboard 4) YouTube 5) Bible. CFO/YouTube/Bible
+   are placeholder panels until their turn.
+
+   TikTok Hub is entirely localStorage — no server needed for it. CFO will
+   be the first tab needing a Netlify function (Google service account,
+   since Telegram's WebView blocks Google's own OAuth screen) — see
+   netlify/functions/lib/telegram-verify.mjs, already in place from an
+   earlier capture-only prototype and reusable as-is for that.
    ========================================================================= */
 
 /* ---------- helpers ---------- */
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-
 const fmtRM = (n) => 'RM' + (Math.round((n + Number.EPSILON) * 100) / 100)
-  .toLocaleString('en-MY', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-
+  .toLocaleString('en-MY', {minimumFractionDigits: 0, maximumFractionDigits: 2});
 const todayISO = () => new Date().toISOString().slice(0, 10);
-const monthKey = (isoDate) => isoDate.slice(0, 7); // YYYY-MM
-const uid = () => 'tx_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const daysBetween = (isoA, isoB) => Math.round((new Date(isoB) - new Date(isoA)) / 86400000);
+const uid = (p) => (p || 'id') + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
-/* ---------- category taxonomy (verbatim from the real sheet) ---------- */
-// type: 'Income' | 'Expense'  |  group: Income / Fixed / Savings / Family / Lifestyle / Optional / Other
-const CATEGORIES = [
-  { name: "Full-time salary (net)",        type: "Income",  group: "Income",    budget: 1942.95 },
-  { name: "Part-time / gig income",        type: "Income",  group: "Income",    budget: 0 },
-  { name: "Sewa rumah (own rent)",         type: "Expense", group: "Fixed",     budget: 250 },
-  { name: "Girlfriend's rent help",        type: "Expense", group: "Fixed",     budget: 0 },
-  { name: "Petrol",                        type: "Expense", group: "Fixed",     budget: 150 },
-  { name: "Reload (Boost eWallet)",        type: "Expense", group: "Fixed",     budget: 100 },
-  { name: "Utility",                       type: "Expense", group: "Fixed",     budget: 20 },
-  { name: "Food (daily)",                  type: "Expense", group: "Fixed",     budget: 300 },
-  { name: "Car sinking fund",              type: "Expense", group: "Savings",   budget: 120 },
-  { name: "Emergency Fund Tier 1",         type: "Expense", group: "Savings",   budget: 150 },
-  { name: "Emergency Fund Tier 2 (ASB)",   type: "Expense", group: "Savings",   budget: 350 },
-  { name: "Gold savings for Mom",          type: "Expense", group: "Family",    budget: 0 },
-  { name: "Sunday treat",                  type: "Expense", group: "Lifestyle", budget: 100 },
-  { name: "Dobi (laundry)",                type: "Expense", group: "Lifestyle", budget: 44 },
-  { name: "Post-jog drinks",               type: "Expense", group: "Lifestyle", budget: 91 },
-  { name: "PTPTN voluntary payment",       type: "Expense", group: "Optional",  budget: 0 },
-  { name: "Other food",                    type: "Expense", group: "Lifestyle", budget: 0 },
-  { name: "Other / Miscellaneous",         type: "Expense", group: "Other",     budget: 0 },
-];
-const CATEGORY_NAMES = CATEGORIES.map(c => c.name);
-const catInfo = (name) => CATEGORIES.find(c => c.name === name) || CATEGORIES[CATEGORIES.length - 1];
-
-// Keyword -> category guesses. English + Malay, checked in order (first match wins).
-const KEYWORD_MAP = [
-  [/\b(salary|gaji|payroll)\b/i, "Full-time salary (net)"],
-  [/\b(freelance|gig|part\s*time|part-time)\b/i, "Part-time / gig income"],
-  [/\b(rent|sewa)\b/i, "Sewa rumah (own rent)"],
-  [/\b(girlfriend|gf)\b.*\brent\b/i, "Girlfriend's rent help"],
-  [/\b(petrol|minyak|fuel|ron95|ron97)\b/i, "Petrol"],
-  [/\b(boost|reload|top ?up|e-?wallet|ewallet|shopeepay|tng)\b/i, "Reload (Boost eWallet)"],
-  [/\b(utility|utilities|bill|tnb|water bill|electric)\b/i, "Utility"],
-  [/\b(car sinking|car fund)\b/i, "Car sinking fund"],
-  [/\b(emergency fund tier 1|ef ?1|ef tier 1)\b/i, "Emergency Fund Tier 1"],
-  [/\b(asb|emergency fund tier 2|ef ?2|ef tier 2)\b/i, "Emergency Fund Tier 2 (ASB)"],
-  [/\b(gold)\b/i, "Gold savings for Mom"],
-  [/\bsunday treat\b/i, "Sunday treat"],
-  [/\b(dobi|laundry)\b/i, "Dobi (laundry)"],
-  [/\b(jog|run|lari|post-?jog|post workout)\b/i, "Post-jog drinks"],
-  [/\bptptn\b/i, "PTPTN voluntary payment"],
-  [/\b(dinner|lunch|breakfast|makan|food|beli|groceries|nasi|roti|ayam|telur|apple|bakso|kangkung|bawang|pisang|aiskrim|mineral|buntut|drinks?|tea|coffee|americano)\b/i, "Food (daily)"],
-];
-
-// Income-signal words used only when nothing else matched, so we don't file
-// a stray gift/refund under an Expense category by default.
-const INCOME_HINT = /\b(received|receive|gave me|gift|refund|bonus|dividend|income)\b/i;
-
-// Words too generic to teach the categorizer anything (would overwrite good
-// learned mappings with noise from unrelated transactions).
-const LEARN_STOPWORDS = new Set([
-  'the','and','for','with','from','this','that','done','paid','rm','a','an',
-  'me','my','to','of','on','in','at','is','it','was','ni','tu','yang','dan'
-]);
-
-/* ---------- Google Sheets sync config ---------- */
-// Public by design — an OAuth Client ID is meant to be embedded in client-side
-// code (unlike a client *secret*, which this app never uses or needs).
-const GOOGLE_CLIENT_ID = '821978082875-10t6b32mn6hi9l6nii0romc71vcn0a0t.apps.googleusercontent.com';
-const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
-const SHEET_TAB = 'Transactions';
-
-/* ---------- storage layer ---------- */
-const LS_TX = 'pcfo_transactions_v1';
-const LS_BUDGETS = 'pcfo_budgets_v1';
-const LS_LEARNED = 'pcfo_learned_v1';
-const LS_SHEET_ID = 'pcfo_sheet_id_v1';
-const LS_SYNCED_IDS = 'pcfo_synced_ids_v1';
-
+/* ---------- storage ---------- */
+const LS = {
+  products: 'pmgr_tt_products_v1',
+  plan: 'pmgr_tt_plan_v1',
+  perf: 'pmgr_tt_perf_v1',
+  compliance: 'pmgr_tt_compliance_v1',
+};
 function safeGet(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch (e) { return fallback; }
+  try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }
+  catch (e) { return fallback; }
 }
 function safeSet(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); return true; }
-  catch (e) { toast('Storage full or unavailable — export your data soon.'); return false; }
+  catch (e) { toast('Storage full or unavailable.'); return false; }
 }
 
-function loadTransactions() { return safeGet(LS_TX, []); }
-function saveTransactions(list) { return safeSet(LS_TX, list); }
+/* =========================================================================
+   TikTok Affiliate Hub — domain logic (pure functions, tested in test.js)
+   ========================================================================= */
 
-function loadLearned() { return safeGet(LS_LEARNED, {}); }
-function saveLearned(map) { return safeSet(LS_LEARNED, map); }
+const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const ANGLES = [
+  { id: 'question', label: 'Question hook' },
+  { id: 'pov', label: 'POV hook' },
+  { id: 'price', label: 'Price-shock hook' },
+];
+const LANGS = [
+  { id: 'bm', label: 'BM Santai' },
+  { id: 'en', label: 'English' },
+  { id: 'mix', label: 'Mix' },
+];
 
-// Splits text into lowercase word tokens worth learning from.
-function learnableWords(text) {
-  return (text || '').toLowerCase().match(/[a-z][a-z']{2,}/g) || [];
+// Real enforcement 14 Aug 2026: claims must be feature-based ("safe",
+// "comfortable", "easier", "guard hand handle"), never health-outcome based
+// ("solves fatigue", "reduces pain", "treats X", "in 2 weeks"). This scans
+// any generated or user-entered product text and flags a match rather than
+// silently emitting it — the caller decides what to do with the flag.
+const HEALTH_CLAIM_PATTERN = /\b(solves?|treats?|cures?|heals?|relieves?|reduces?|eliminates?|prevents?)\b.{0,25}\b(pain|fatigue|ache|inflammation|arthritis|injury|stress|condition|symptom)s?\b|\bin (just )?\d+ (days?|weeks?|hours?)\b|\bmedical(ly)?\b|\bclinically proven\b/i;
+function checkHealthClaim(text) {
+  const m = HEALTH_CLAIM_PATTERN.exec(text || '');
+  return m ? m[0] : null;
 }
 
-// Records that this text's words point to `category`, so future entries
-// with the same word are recognized even if they don't hit the static
-// keyword table. Called when the user corrects/confirms a category.
-function learnFromCorrection(rawText, category, learned) {
-  learnableWords(rawText).forEach(w => {
-    if (!LEARN_STOPWORDS.has(w)) learned[w] = category;
+function newProduct(fields) {
+  return {
+    id: uid('prod'),
+    name: fields.name || '',
+    price: fields.price || 0,
+    problem: fields.problem || '',   // noun phrase: "greasy pans that never come clean"
+    benefit: fields.benefit || '',   // predicate phrase: "cuts grease in one wipe"
+    urgent: !!fields.urgent,         // limited-stock flag; gates urgency wording
+    createdAt: Date.now(),
+  };
+}
+
+// Angle hook line — the single sentence shared by the caption AND scene 1
+// of the TOC script, so they read as one idea (per creator-batch-planner
+// guidance), not two competing ones.
+function hookLine(product, angle, lang) {
+  const { name, price, problem, benefit } = product;
+  if (angle === 'question') {
+    if (lang === 'bm') return `Korang pernah tak ${problem}?`;
+    if (lang === 'mix') return `Korang pernah tak ${problem}? So annoying kan?`;
+    return `Ever dealt with ${problem}?`;
+  }
+  if (angle === 'pov') {
+    if (lang === 'bm') return `POV: ${problem}, then ${name} masuk hidup korang`;
+    if (lang === 'mix') return `POV: ${problem}, then ${name} literally saves the day`;
+    return `POV: ${problem}, then ${name} enters the picture`;
+  }
+  // price
+  if (lang === 'bm') return `RM${price} je? ${name} ni patut lagi mahal weh`;
+  if (lang === 'mix') return `RM${price} only? ${name} ni worth way more than that`;
+  return `Only RM${price}? ${name} should cost way more than this`;
+}
+
+function ctaLine(product, lang, urgent) {
+  const stock = urgent ? (lang === 'bm' ? ' Stok terhad je ni.' : ' Limited stock only.') : '';
+  if (lang === 'bm') return `Link kat bio/keranjang kuning.${stock} Grab je sebelum sold out.`;
+  if (lang === 'mix') return `Link is in bio/yellow basket.${stock} Grab it before it's gone.`;
+  return `Link's in bio/the yellow basket.${stock} Grab yours before it's gone.`;
+}
+
+const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+
+// Benefit is free text the user typed (in whatever language they wrote it
+// in) — the language selector only changes the surrounding hook/CTA/price
+// framing around it, not this line itself. Sentence-cased so it reads as
+// its own sentence after the hook, not a lowercase fragment.
+function benefitLine(product) {
+  return cap(`${product.benefit}.`);
+}
+
+function priceLine(product, lang) {
+  const { price } = product;
+  if (lang === 'bm') return `Cuma RM${price}.`;
+  if (lang === 'mix') return `Only RM${price} je.`;
+  return `Just RM${price}.`;
+}
+
+// Generates one caption for one angle+language. Never emits urgency
+// wording unless product.urgent is set — manufactured scarcity on an
+// affiliate account is a compliance risk, not a style choice.
+function generateCaption(product, angle, lang) {
+  const hook = hookLine(product, angle, lang);
+  const ben = benefitLine(product);
+  const cta = ctaLine(product, lang, product.urgent);
+  const hashtags = lang === 'en'
+    ? '#TikTokMadeMeBuyIt #kitchenfinds #shopwithme'
+    : '#tiktokshopmalaysia #ultramain #shopwithme';
+  const text = [hook, ben, cta, hashtags].join('\n\n');
+  const flaggedIn = checkHealthClaim(product.problem) || checkHealthClaim(product.benefit) || checkHealthClaim(text);
+  return { angle, lang, text, flagged: !!flaggedIn, flagMatch: flaggedIn };
+}
+
+function generateAllCaptions(product) {
+  const out = [];
+  ANGLES.forEach(a => LANGS.forEach(l => out.push(generateCaption(product, a.id, l.id))));
+  return out;
+}
+
+// Scene count from clip duration: ~3-4 sec/scene, per creator-batch-planner
+// guidance (divide by ~3.5s).
+function sceneCount(durationSec) {
+  return Math.max(2, Math.round((Number(durationSec) || 0) / 3.5));
+}
+
+// Beat sequence per scene count is a fixed lookup, not computed on the fly
+// (creator-batch-planner: "it's a small table and it makes the output
+// predictable"). Beats: HOOK / PROBLEM / PRODUCT / BENEFIT / PRICE / CTA.
+// Scene 1 is always HOOK (matches the caption hook); the last scene is
+// always CTA.
+const BEAT_PLANS = {
+  2: [['HOOK', 'PROBLEM'], ['BENEFIT', 'PRICE', 'CTA']],
+  3: [['HOOK', 'PROBLEM'], ['PRODUCT', 'BENEFIT'], ['PRICE', 'CTA']],
+  4: [['HOOK'], ['PROBLEM', 'PRODUCT'], ['BENEFIT'], ['PRICE', 'CTA']],
+  5: [['HOOK'], ['PROBLEM'], ['PRODUCT', 'BENEFIT'], ['PRICE'], ['CTA']],
+};
+function beatPlanFor(count) {
+  if (BEAT_PLANS[count]) return BEAT_PLANS[count];
+  // 6+: one beat per scene, pad extra scenes by repeating BENEFIT before CTA
+  const base = ['HOOK', 'PROBLEM', 'PRODUCT', 'BENEFIT', 'PRICE', 'CTA'];
+  if (count === 6) return base.map(b => [b]);
+  const padded = base.slice(0, -1);
+  while (padded.length < count - 1) padded.push('BENEFIT');
+  padded.push('CTA');
+  return padded.map(b => [b]);
+}
+
+function beatText(beat, product, angle, lang) {
+  if (beat === 'HOOK') return hookLine(product, angle, lang);
+  if (beat === 'PROBLEM') return product.problem;
+  if (beat === 'PRODUCT') return product.name;
+  if (beat === 'BENEFIT') return benefitLine(product);
+  if (beat === 'PRICE') return priceLine(product, lang);
+  return ctaLine(product, lang, product.urgent);
+}
+
+// Joins beat fragments into one scene line. A fragment that already ends
+// in sentence punctuation (from benefitLine/priceLine/ctaLine, which are
+// full sentences) gets a plain space next, so it doesn't read as
+// "Sentence. — Next sentence."; a bare phrase (problem/product, no
+// punctuation of its own) gets an em-dash so it still reads as connected
+// rather than run together.
+function joinBeats(parts) {
+  let out = '';
+  parts.forEach((part, i) => {
+    if (i === 0) { out = part; return; }
+    out += (/[.!?]$/.test(out) ? ' ' : ' — ') + part;
   });
-  return learned;
+  return out;
 }
 
-// Sync has been verified against the dev-copy sheet, so this now defaults
-// to the real Monthly Budget Plan spreadsheet.
-const REAL_SHEET_ID = '1JR4CjH-KyZfyc5ZLTlWNE5SP6cl70P6rxnDzmDQzGa4';
-function loadSheetId() { return safeGet(LS_SHEET_ID, REAL_SHEET_ID); }
-function saveSheetId(id) { return safeSet(LS_SHEET_ID, id); }
-function loadSyncedIds() { return safeGet(LS_SYNCED_IDS, []); }
-function saveSyncedIds(list) { return safeSet(LS_SYNCED_IDS, list); }
-
-function loadBudgets() {
-  const stored = safeGet(LS_BUDGETS, {});
-  const merged = {};
-  CATEGORIES.forEach(c => { merged[c.name] = (c.name in stored) ? stored[c.name] : c.budget; });
-  return merged;
+// Merges beats sharing a scene into one line, skipping anything already
+// said this line (a product name often contains its own benefit word).
+function generateTOC(product, angle, lang, durationSec) {
+  const count = sceneCount(durationSec);
+  const plan = beatPlanFor(count);
+  const scenes = plan.map((beats) => {
+    const seen = new Set();
+    const parts = [];
+    beats.forEach(b => {
+      const text = (beatText(b, product, angle, lang) || '').trim();
+      if (!text) return;
+      const key = text.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      parts.push(text);
+    });
+    return cap(joinBeats(parts));
+  });
+  const flaggedIn = checkHealthClaim(scenes.join(' '));
+  return { angle, lang, durationSec, sceneCount: count, scenes, flagged: !!flaggedIn, flagMatch: flaggedIn };
 }
-function saveBudgets(map) { return safeSet(LS_BUDGETS, map); }
 
-/* ---------- domain logic (pure) ---------- */
+/* ---------- weekly batch planner ---------- */
 
-// `learned` is an optional {word: category} map built from past corrections
-// (see learnFromCorrection). Checked before the static keyword table so a
-// merchant/item the user has corrected before is recognized next time.
-function guessCategory(text, learned) {
-  if (learned) {
-    for (const w of learnableWords(text)) {
-      if (learned[w]) return { category: learned[w], confidence: 0.9 };
+function emptyPlan(weekStartISO) {
+  return {
+    weekStart: weekStartISO,
+    slots: DOW.map(d => ({ dow: d, productId: null, angleId: null, isRepost: false, openingChanged: false })),
+  };
+}
+function mondayOfISO(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  const day = d.getDay(); // 0=Sun..6=Sat
+  const diff = (day === 0 ? -6 : 1 - day);
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+// A repost slot that hasn't had its opening 1-3s marked changed gets
+// flagged — TikTok suppresses an unmodified repost as a duplicate.
+function planWarnings(plan) {
+  return plan.slots
+    .map((s, i) => (s.isRepost && !s.openingChanged) ? { index: i, dow: s.dow } : null)
+    .filter(Boolean);
+}
+
+/* ---------- performance tracking ---------- */
+
+// TikTok Creator Center CSV headers vary by export version/locale; match
+// fuzzily rather than hardcoding one exact header row.
+const PERF_COLMAP = [
+  [/video.*(id|link|url)/i, 'videoId'],
+  [/video.*(title|desc)/i, 'title'],
+  [/post.*(time|date)|^date$/i, 'date'],
+  [/views?$/i, 'views'],
+  [/likes?$/i, 'likes'],
+  [/comments?$/i, 'comments'],
+  [/shares?$/i, 'shares'],
+];
+function mapPerfHeaders(headerRow) {
+  return headerRow.map(h => {
+    const hit = PERF_COLMAP.find(([re]) => re.test(String(h).trim()));
+    return hit ? hit[1] : null;
+  });
+}
+function parsePerfCSV(text) {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return [];
+  const header = lines[0].split(',').map(s => s.trim());
+  const mapped = mapPerfHeaders(header);
+  return lines.slice(1).map(line => {
+    const cells = line.split(',').map(s => s.trim());
+    const row = {};
+    mapped.forEach((key, i) => { if (key) row[key] = cells[i]; });
+    row.views = Number(row.views) || 0;
+    row.likes = Number(row.likes) || 0;
+    row.comments = Number(row.comments) || 0;
+    row.shares = Number(row.shares) || 0;
+    return row;
+  }).filter(r => r.date || r.videoId);
+}
+
+function newPerfEntry(fields) {
+  return {
+    id: uid('perf'),
+    videoId: fields.videoId || '',
+    productId: fields.productId || null,
+    hookType: fields.hookType || 'other', // question | pov | price | other — TikTok's export doesn't know this, tag manually
+    date: fields.date || todayISO(),
+    views: Number(fields.views) || 0,
+    likes: Number(fields.likes) || 0,
+    comments: Number(fields.comments) || 0,
+    shares: Number(fields.shares) || 0,
+    loggedAt: Date.now(),
+  };
+}
+// Performance only "settles" ~7 days after posting (videos take about a
+// week to reach ~90% of lifetime views) — reads before that are noise.
+function isSettled(entry, today) {
+  return daysBetween(entry.date, today || todayISO()) >= 7;
+}
+function engagementRate(entry) {
+  if (!entry.views) return 0;
+  return (entry.likes + entry.comments + entry.shares) / entry.views;
+}
+// Best hook type per product, computed only from settled entries, and only
+// once at least 3 posts exist for that product — one post is noise.
+function bestHookType(entries, productId, today) {
+  const settled = entries.filter(e => e.productId === productId && isSettled(e, today));
+  if (settled.length < 3) return null;
+  const byHook = {};
+  settled.forEach(e => {
+    byHook[e.hookType] = byHook[e.hookType] || { count: 0, totalRate: 0 };
+    byHook[e.hookType].count++;
+    byHook[e.hookType].totalRate += engagementRate(e);
+  });
+  let best = null;
+  Object.entries(byHook).forEach(([hook, s]) => {
+    const avg = s.totalRate / s.count;
+    if (!best || avg > best.avg) best = { hook, avg, count: s.count };
+  });
+  return best;
+}
+// Re-importing must update rows rather than duplicate them — key on
+// videoId (falling back to date+views if a row has no ID) plus date.
+function mergePerfImport(existing, imported) {
+  const byKey = new Map(existing.map(e => [(e.videoId || e.date + '|' + e.views), e]));
+  imported.forEach(row => {
+    const key = row.videoId || (row.date + '|' + row.views);
+    const prior = byKey.get(key);
+    if (prior) {
+      Object.assign(prior, { views: row.views, likes: row.likes, comments: row.comments, shares: row.shares });
+    } else {
+      const entry = newPerfEntry(row);
+      byKey.set(key, entry);
+      existing.push(entry);
     }
-  }
-  for (const [re, cat] of KEYWORD_MAP) if (re.test(text)) return { category: cat, confidence: 0.85 };
-  if (INCOME_HINT.test(text)) return { category: "Part-time / gig income", confidence: 0.35 };
-  return { category: "Other / Miscellaneous", confidence: 0.3 };
-}
-
-// Flags candidates that look like a repeat of something already logged
-// today (same date + category + amount) so the confirmation card can warn
-// before saving, rather than silently double-counting or silently dropping.
-function flagDuplicates(pending, transactions, today) {
-  const todaysKeys = new Set(
-    transactions.filter(t => t.date === today).map(t => `${t.category}|${t.amount}`)
-  );
-  pending.forEach(p => {
-    p.duplicate = p.amount != null && todaysKeys.has(`${p.category}|${p.amount}`);
   });
-  return pending;
+  return existing;
 }
 
-/* ---------- Sheets sync logic (pure — the parts that don't need `fetch`) ---------- */
-
-// Matches the sheet's existing "06 Aug 2026" text format so Sheets parses it
-// as the same date type already used in the column, not a different locale.
-function fmtSheetDate(isoDate) {
-  const d = new Date(isoDate + 'T00:00:00');
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = d.toLocaleDateString('en-US', { month: 'short' });
-  return `${day} ${month} ${d.getFullYear()}`;
+/* ---------- compliance ---------- */
+function complianceStatus(compliance, today) {
+  const last = compliance.lastChecked;
+  if (!last) return { status: 'warn', days: null };
+  const days = daysBetween(last, today || todayISO());
+  return { status: days > 14 ? 'warn' : 'ok', days };
 }
 
-// `columnValues` is the Transactions sheet's column A as returned by the
-// Sheets API (an array of single-cell arrays, header row included). Returns
-// the first row number (1-indexed, sheet rows) that's blank — that's where
-// the pre-formatted formulas in the other columns are waiting for data, per
-// the sheet's own "~300 pre-formatted rows" design.
-function findFirstEmptyRow(columnValues) {
-  for (let i = 1; i < columnValues.length; i++) { // skip header at index 0
-    const cell = columnValues[i] && columnValues[i][0];
-    if (!cell || !String(cell).trim()) return i + 1; // sheet rows are 1-indexed
-  }
-  return columnValues.length + 1;
-}
+/* =========================================================================
+   App state + render
+   ========================================================================= */
 
-// Builds one write per transaction: only columns A (Date), B (Category),
-// D (Amount), E (Notes) — never touching C (Type) or F (Month), which are
-// the sheet's own pre-filled formulas for that row.
-function buildSyncWrites(transactions, startRow) {
-  return transactions.map((t, i) => {
-    const row = startRow + i;
-    return {
-      transactionId: t.id,
-      row,
-      ab: { range: `${SHEET_TAB}!A${row}:B${row}`, values: [[fmtSheetDate(t.date), t.category]] },
-      de: { range: `${SHEET_TAB}!D${row}:E${row}`, values: [[t.amount, t.note || '']] },
-    };
-  });
-}
-
-// Pull the amount out of a segment. Prefers an RM-prefixed number; falls
-// back to the first bare number found. Returns { amount, rest } or null.
-function extractAmount(segment) {
-  let m = segment.match(/rm\s*([\d,]+(?:\.\d{1,2})?)/i);
-  if (m) {
-    const amount = parseFloat(m[1].replace(/,/g, ''));
-    const rest = (segment.slice(0, m.index) + ' ' + segment.slice(m.index + m[0].length)).trim();
-    return { amount, rest };
-  }
-  m = segment.match(/\b(\d+(?:\.\d{1,2})?)\b/);
-  if (m) {
-    const amount = parseFloat(m[1]);
-    const rest = (segment.slice(0, m.index) + ' ' + segment.slice(m.index + m[0].length)).trim();
-    return { amount, rest };
-  }
-  return null;
-}
-
-// Splits free text into one or more raw transaction segments.
-function splitSegments(text) {
-  return text.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
-}
-
-// Turns one raw segment into a candidate transaction (not yet saved).
-// `learned` is the optional per-word category map from past corrections.
-function parseSegment(segment, learned) {
-  const extracted = extractAmount(segment);
-  if (!extracted || !(extracted.amount > 0)) {
-    return { rawText: segment, amount: null, note: segment, category: "Other / Miscellaneous",
-             type: "Expense", confidence: 0, error: 'No amount found' };
-  }
-  const note = extracted.rest.replace(/\s+/g, ' ').replace(/^(for|on|to)\s+/i, '').trim();
-  const { category, confidence } = guessCategory(segment, learned);
-  const type = catInfo(category).type;
-  return { rawText: segment, amount: extracted.amount, note: note || segment,
-           category, type, confidence, error: null };
-}
-
-function parseInput(text, learned) {
-  return splitSegments(text).map(s => parseSegment(s, learned));
-}
-
-function monthlyTotals(transactions, ymKey) {
-  let income = 0, expense = 0;
-  const byCategory = {};
-  transactions.forEach(t => {
-    if (monthKey(t.date) !== ymKey) return;
-    if (t.type === 'Income') income += t.amount; else expense += t.amount;
-    byCategory[t.category] = (byCategory[t.category] || 0) + t.amount;
-  });
-  return { income, expense, byCategory };
-}
-
-function lifetimeCash(transactions) {
-  return transactions.reduce((sum, t) => sum + (t.type === 'Income' ? t.amount : -t.amount), 0);
-}
-
-/* ---------- app state ---------- */
 const state = {
-  tab: 'capture',
-  transactions: loadTransactions(),
-  budgets: loadBudgets(),
-  learned: loadLearned(),
-  pending: [],
-  sheetId: loadSheetId(),
-  syncedIds: new Set(loadSyncedIds()),
-  accessToken: null,   // kept in memory only — never persisted
-  syncing: false,
-  lastSyncMsg: '',
+  tab: 'tiktok', // TikTok is the built tab this pass — land there, not an empty Dashboard
+  ttSubtab: 'plan',
+  products: safeGet(LS.products, []),
+  plan: safeGet(LS.plan, null),
+  perf: safeGet(LS.perf, []),
+  compliance: safeGet(LS.compliance, {}),
+  genProductId: null,
+  genDuration: 15,
+};
+if (!state.plan || state.plan.weekStart !== mondayOfISO(todayISO())) {
+  state.plan = emptyPlan(mondayOfISO(todayISO()));
+}
+
+const HEADER = {
+  dashboard: ['Dashboard', () => new Date().toLocaleDateString('en-MY', { month: 'short', day: 'numeric', year: 'numeric' })],
+  tiktok: ['TikTok Affiliate Hub', () => '@ultramain · TikTok Shop Creator'],
+  cfo: ['Personal CFO', () => ''],
+  youtube: ['YouTube Analyzer', () => ''],
+  bible: ['Daily Renungan', () => ''],
 };
 
-/* ---------- render ---------- */
 function render() {
-  ['capture', 'log', 'budget', 'dashboard', 'sync'].forEach(t => {
+  ['dashboard', 'tiktok', 'cfo', 'youtube', 'bible'].forEach(t => {
     document.getElementById('view-' + t).classList.toggle('hidden', state.tab !== t);
   });
   document.querySelectorAll('nav.tabbar button').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === state.tab);
   });
+  const [title, sub] = HEADER[state.tab];
+  document.getElementById('header-title').textContent = title;
+  document.getElementById('header-subtitle').textContent = sub();
 
-  if (state.tab === 'capture') { renderDashStats(); renderPending(); renderTodayLog(); }
-  if (state.tab === 'log') renderFullLog();
-  if (state.tab === 'budget') renderBudgetEditor();
-  if (state.tab === 'dashboard') renderDashboardTab();
-  if (state.tab === 'sync') renderSyncTab();
+  if (state.tab === 'dashboard') renderDashboard();
+  if (state.tab === 'tiktok') renderTikTok();
 }
 
-function renderDashStats() {
-  const ym = monthKey(todayISO());
-  const { income, expense, byCategory } = monthlyTotals(state.transactions, ym);
-  const cash = lifetimeCash(state.transactions);
-  const totalExpenseBudget = CATEGORIES.filter(c => c.type === 'Expense')
-    .reduce((s, c) => s + (state.budgets[c.name] || 0), 0);
-  const remaining = totalExpenseBudget - expense;
-
-  document.getElementById('dash-stats').innerHTML = `
-    <div class="stat ${cash < 0 ? 'bad' : ''}"><div class="v">${esc(fmtRM(cash))}</div><div class="l">Current cash</div></div>
-    <div class="stat"><div class="v">${esc(fmtRM(expense))}</div><div class="l">Monthly spending</div></div>
-    <div class="stat ${remaining < 0 ? 'bad' : 'good'}"><div class="v">${esc(fmtRM(remaining))}</div><div class="l">Budget remaining</div></div>
-  `;
-}
-
-function pendingItemHTML(p, i) {
-  const opts = CATEGORY_NAMES.map(n =>
-    `<option value="${esc(n)}" ${n === p.category ? 'selected' : ''}>${esc(n)}</option>`).join('');
-  const info = catInfo(p.category);
-  const typeBadge = `<span class="badge ${info.type === 'Income' ? 'income' : 'expense'}">${info.type}</span>`;
-  const reviewBadge = p.confidence < 0.5 ? `<span class="badge review">check category</span>` : '';
-  const dupBadge = p.duplicate ? `<span class="badge review">possible duplicate</span>` : '';
-  const errorLine = p.error ? `<div class="raw" style="color:var(--bad)">⚠ ${esc(p.error)} — edit amount below</div>` : '';
-  return `
-    <div class="pending-item" data-pending-index="${i}">
-      <div class="top">
-        <div class="amt">${p.amount != null ? esc(fmtRM(p.amount)) : '—'}</div>
-        <div>${typeBadge}${reviewBadge}${dupBadge}</div>
-      </div>
-      <div class="raw">"${esc(p.rawText)}"</div>
-      ${errorLine}
-      <input type="number" step="0.01" min="0" placeholder="Amount (RM)"
-        value="${p.amount != null ? p.amount : ''}" data-action="edit-pending-amount" data-index="${i}">
-      <select data-action="edit-pending-category" data-index="${i}">${opts}</select>
-      <input type="text" placeholder="Note" value="${esc(p.note)}"
-        data-action="edit-pending-note" data-index="${i}">
-      <button class="btn secondary small" style="margin-top:6px" data-action="remove-pending" data-index="${i}">Remove this line</button>
-    </div>`;
-}
-
-function renderPending() {
-  const list = document.getElementById('pending-list');
-  const actions = document.getElementById('pending-actions');
-  if (!state.pending.length) { list.innerHTML = ''; actions.classList.add('hidden'); return; }
-  list.innerHTML = state.pending.map(pendingItemHTML).join('');
-  actions.classList.remove('hidden');
-}
-
-function logItemHTML(t) {
-  const info = catInfo(t.category);
-  const sign = t.type === 'Income' ? '+' : '−';
-  return `
-    <div class="log-item">
-      <div>
-        <div class="cat">${esc(t.category)}</div>
-        <div class="meta">${esc(t.date)}${t.note ? ' · ' + esc(t.note) : ''} · ${esc(info.group)}</div>
-      </div>
-      <div class="amt ${t.type === 'Income' ? 'income' : ''}">${sign}${esc(fmtRM(t.amount))}</div>
-    </div>`;
-}
-
-function renderTodayLog() {
-  const today = todayISO();
-  const todays = state.transactions.filter(t => t.date === today).sort((a, b) => b.createdAt - a.createdAt);
-  const el = document.getElementById('today-log');
-  el.innerHTML = todays.length
-    ? todays.map(logItemHTML).join('')
-    : `<div class="empty">Nothing logged today yet.</div>`;
-}
-
-function renderFullLog() {
-  const sorted = [...state.transactions].sort((a, b) => b.createdAt - a.createdAt);
-  const el = document.getElementById('full-log');
-  el.innerHTML = sorted.length
-    ? sorted.map(logItemHTML).join('')
-    : `<div class="empty">No transactions yet. Add one on the Capture tab.</div>`;
-}
-
-function renderBudgetEditor() {
-  const groups = ['Income', 'Fixed', 'Savings', 'Family', 'Lifestyle', 'Optional', 'Other'];
-  let html = '';
-  groups.forEach(g => {
-    const cats = CATEGORIES.filter(c => c.group === g);
-    if (!cats.length) return;
-    html += `<div class="section-title" style="margin-top:14px">${esc(g)}</div>`;
-    cats.forEach(c => {
-      html += `
-        <div class="row budget-row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
-          <div>${esc(c.name)}</div>
-          <input type="number" step="0.01" min="0" value="${state.budgets[c.name]}"
-            data-action="edit-budget" data-category="${esc(c.name)}">
-        </div>`;
-    });
-  });
-  document.getElementById('budget-editor').innerHTML = html;
-}
-
-function renderDashboardTab() {
-  const ym = monthKey(todayISO());
-  const { income, expense, byCategory } = monthlyTotals(state.transactions, ym);
-  const plannedIncome = CATEGORIES.filter(c => c.type === 'Income').reduce((s, c) => s + (state.budgets[c.name] || 0), 0);
-  const plannedExpense = CATEGORIES.filter(c => c.type === 'Expense').reduce((s, c) => s + (state.budgets[c.name] || 0), 0);
-  const monthLabel = new Date(ym + '-01T00:00:00').toLocaleDateString('en-MY', { month: 'long', year: 'numeric' });
-
-  document.getElementById('dashboard-month-title').textContent = monthLabel;
-  document.getElementById('dashboard-summary').innerHTML = `
-    <table>
-      <tr><td>Planned income</td><td class="num">${esc(fmtRM(plannedIncome))}</td></tr>
-      <tr><td>Actual income logged</td><td class="num">${esc(fmtRM(income))}</td></tr>
-      <tr><td>Planned expenses</td><td class="num">${esc(fmtRM(plannedExpense))}</td></tr>
-      <tr><td>Actual expenses logged</td><td class="num">${esc(fmtRM(expense))}</td></tr>
-      <tr><td><b>Planned net</b></td><td class="num"><b>${esc(fmtRM(plannedIncome - plannedExpense))}</b></td></tr>
-      <tr><td><b>Actual net (this month)</b></td><td class="num"><b>${esc(fmtRM(income - expense))}</b></td></tr>
-    </table>`;
-
-  const groups = ['Fixed', 'Savings', 'Family', 'Lifestyle', 'Optional', 'Other'];
-  let rows = `<table><tr><th>Category</th><th class="num">Target</th><th class="num">Actual</th><th class="num">Variance</th></tr>`;
-  groups.forEach(g => {
-    const cats = CATEGORIES.filter(c => c.group === g && c.type === 'Expense');
-    if (!cats.length) return;
-    rows += `<tr class="group-head"><td colspan="4">${esc(g)}</td></tr>`;
-    cats.forEach(c => {
-      const target = state.budgets[c.name] || 0;
-      const actual = byCategory[c.name] || 0;
-      const variance = target - actual;
-      const over = target > 0 && actual > target;
-      rows += `<tr>
-        <td>${esc(c.name)}</td>
-        <td class="num">${target ? esc(fmtRM(target)) : '–'}</td>
-        <td class="num">${actual ? esc(fmtRM(actual)) : '–'}</td>
-        <td class="num ${over ? 'status-over' : 'status-ok'}">${target ? esc(fmtRM(variance)) : '–'}</td>
-      </tr>`;
-    });
-  });
-  rows += `</table>`;
-  document.getElementById('dashboard-breakdown').innerHTML = rows;
-}
-
-function renderSyncTab() {
-  const pending = state.transactions.filter(t => !state.syncedIds.has(t.id)).length;
-  const el = document.getElementById('sync-sheet-id');
-  if (document.activeElement !== el) el.value = state.sheetId; // don't fight the user mid-type
-
-  const signedIn = !!state.accessToken;
-  document.getElementById('btn-google-signin').textContent = signedIn ? 'Connected ✓' : 'Connect Google';
-  document.getElementById('btn-sync-now').disabled = !(signedIn && state.sheetId && pending > 0) || state.syncing;
-  document.getElementById('btn-sync-now').textContent = state.syncing ? 'Syncing…' : `Sync now (${pending} pending)`;
-
-  document.getElementById('sync-status').innerHTML = `
-    <div class="stat-row" style="grid-template-columns:1fr 1fr">
-      <div class="stat"><div class="v">${pending}</div><div class="l">Not yet synced</div></div>
-      <div class="stat ${signedIn ? 'good' : ''}"><div class="v">${signedIn ? 'Yes' : 'No'}</div><div class="l">Signed in</div></div>
+function renderDashboard() {
+  const cs = complianceStatus(state.compliance);
+  document.getElementById('view-dashboard').innerHTML = `
+    <div class="card accent">
+      <div class="card-title">🎵 TikTok — Compliance</div>
+      <span class="pill ${cs.status === 'ok' ? 'ok' : 'warn'}">${cs.status === 'ok' ? 'Reviewed recently' : 'Needs review'}</span>
+      <p style="margin:10px 0 0;font-size:12px;color:var(--sub)">
+        ${state.compliance.lastChecked ? `Last checked ${esc(state.compliance.lastChecked)} (${cs.days}d ago)` : 'Never checked — see the TikTok tab’s Compliance section.'}
+      </p>
     </div>
-    ${state.lastSyncMsg ? `<p class="muted" style="font-size:12.5px">${esc(state.lastSyncMsg)}</p>` : ''}
+    <div class="card">
+      <div class="card-title">💰 CFO · ▶️ YouTube · ✝️ Bible</div>
+      <p style="font-size:12px;color:var(--muted)">These summary cards land once each tab is built (build order: CFO next, then YouTube, then Bible).</p>
+    </div>
   `;
 }
 
-/* ---------- Google sign-in + sync (impure — needs the network) ---------- */
-let googleTokenClient = null;
+/* ---------- TikTok tab render ---------- */
 
-function ensureTokenClient() {
-  if (googleTokenClient || typeof google === 'undefined') return googleTokenClient;
-  googleTokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: GOOGLE_CLIENT_ID,
-    scope: SHEETS_SCOPE,
-    callback: (resp) => {
-      if (resp.error) { toast('Google sign-in failed: ' + resp.error); return; }
-      state.accessToken = resp.access_token;
-      toast('Connected to Google.');
-      render();
-    },
-  });
-  return googleTokenClient;
+const TT_SUBTABS = [
+  { id: 'plan', label: 'Plan week' },
+  { id: 'products', label: 'Products' },
+  { id: 'generate', label: 'Generate' },
+  { id: 'performance', label: 'Performance' },
+  { id: 'compliance', label: 'Compliance' },
+];
+
+function renderTikTok() {
+  document.getElementById('tiktok-subtabs').innerHTML = TT_SUBTABS.map(s =>
+    `<button data-action="tt-subtab" data-sub="${s.id}" class="${state.ttSubtab === s.id ? 'active' : ''}">${s.label}</button>`
+  ).join('');
+  const fn = { plan: renderTTPlan, products: renderTTProducts, generate: renderTTGenerate,
+               performance: renderTTPerformance, compliance: renderTTCompliance }[state.ttSubtab];
+  document.getElementById('tiktok-content').innerHTML = fn();
 }
 
-function doGoogleSignIn() {
-  if (typeof google === 'undefined') { toast('Google sign-in script not loaded — check your connection.'); return; }
-  const client = ensureTokenClient();
-  if (!client) return;
-  client.requestAccessToken();
+function renderTTPlan() {
+  const warnings = planWarnings(state.plan);
+  const rows = state.plan.slots.map((slot, i) => {
+    const product = state.products.find(p => p.id === slot.productId);
+    const angle = ANGLES.find(a => a.id === slot.angleId);
+    const warn = warnings.find(w => w.index === i);
+    return `
+      <div class="plan-slot">
+        <div class="dow">${slot.dow}</div>
+        <select data-action="plan-product" data-index="${i}">
+          <option value="">— pick a product —</option>
+          ${state.products.map(p => `<option value="${p.id}" ${p.id === slot.productId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
+        </select>
+        <div class="row" style="margin-top:8px">
+          <select data-action="plan-angle" data-index="${i}" style="flex:1">
+            <option value="">— angle —</option>
+            ${ANGLES.map(a => `<option value="${a.id}" ${a.id === slot.angleId ? 'selected' : ''}>${a.label}</option>`).join('')}
+          </select>
+        </div>
+        <label class="checklist" style="margin-top:8px">
+          <input type="checkbox" data-action="plan-repost" data-index="${i}" ${slot.isRepost ? 'checked' : ''} style="width:auto">
+          Reusing a clip (repost)
+        </label>
+        ${slot.isRepost ? `
+        <label class="checklist" style="margin-top:6px">
+          <input type="checkbox" data-action="plan-opening" data-index="${i}" ${slot.openingChanged ? 'checked' : ''} style="width:auto">
+          Changed the first 1–3 seconds
+        </label>` : ''}
+        ${warn ? `<div class="flag">⚠ Repost with an unchanged opening — TikTok will likely suppress it as a duplicate.</div>` : ''}
+      </div>`;
+  }).join('');
+  return `
+    <div class="section-title">Week of ${esc(state.plan.weekStart)}</div>
+    ${state.products.length ? rows : `<div class="empty">Add products first (Products tab) before planning the week.</div>`}
+  `;
 }
 
-async function sheetsFetch(url, options) {
-  const res = await fetch(url, {
-    ...options,
-    headers: { ...(options && options.headers), Authorization: `Bearer ${state.accessToken}` },
-  });
-  if (!res.ok) {
-    if (res.status === 401) state.accessToken = null; // token expired — needs reconnect
-    const body = await res.text().catch(() => '');
-    throw new Error(`Sheets API ${res.status}: ${body.slice(0, 200)}`);
-  }
-  return res.json();
+function renderTTProducts() {
+  const list = state.products.map(p => {
+    const problemFlag = checkHealthClaim(p.problem);
+    const benefitFlag = checkHealthClaim(p.benefit);
+    return `
+    <div class="list-item">
+      <div class="top">
+        <div>
+          <div class="name">${esc(p.name)}</div>
+          <div class="meta">RM${p.price} · ${esc(p.problem)}</div>
+        </div>
+        <button class="btn secondary small" data-action="remove-product" data-id="${p.id}">Remove</button>
+      </div>
+      <div class="meta" style="margin-top:6px">${esc(p.benefit)}${p.urgent ? ' · ⏳ limited stock' : ''}</div>
+      ${(problemFlag || benefitFlag) ? `<div class="flag">⚠ Possible health-outcome claim ("${esc(problemFlag || benefitFlag)}") — rephrase to a feature (e.g. "safe", "comfortable", "easier"), not an outcome. TikTok flagged similar language on 14 Aug 2026.</div>` : ''}
+    </div>`;
+  }).join('');
+  return `
+    <div class="section-title">Add a product</div>
+    <div class="card">
+      <div class="field"><label>Name</label><input type="text" id="pf-name" placeholder="e.g. Non-stick Guard Peeler"></div>
+      <div class="row">
+        <div class="field" style="flex:1"><label>Price (RM)</label><input type="number" id="pf-price" placeholder="29"></div>
+        <div class="field" style="flex:1"><label>Limited stock?</label>
+          <select id="pf-urgent"><option value="">No</option><option value="1">Yes</option></select>
+        </div>
+      </div>
+      <div class="field"><label>Problem (noun phrase)</label><input type="text" id="pf-problem" placeholder="e.g. slippery peelers that nick your fingers"></div>
+      <div class="field"><label>Benefit (predicate phrase)</label><input type="text" id="pf-benefit" placeholder="e.g. has a guard handle so it's comfortable to grip"></div>
+      <button class="btn block" data-action="add-product">Add product</button>
+    </div>
+    <div class="section-title">Catalog (${state.products.length})</div>
+    ${list || `<div class="empty">No products yet.</div>`}
+  `;
 }
 
-async function doSyncNow() {
-  if (!state.accessToken || !state.sheetId || state.syncing) return;
-  const toSync = state.transactions.filter(t => !state.syncedIds.has(t.id));
-  if (!toSync.length) { toast('Nothing to sync.'); return; }
+function renderTTGenerate() {
+  if (!state.products.length) return `<div class="empty">Add a product first (Products tab).</div>`;
+  if (!state.genProductId) state.genProductId = state.products[0].id;
+  const product = state.products.find(p => p.id === state.genProductId) || state.products[0];
+  const captions = generateAllCaptions(product);
+  const captionBlocks = ANGLES.map(a => {
+    const langBlocks = LANGS.map(l => {
+      const c = captions.find(x => x.angle === a.id && x.lang === l.id);
+      return `<div class="gen-block"><div class="lang-label">${l.label}</div><pre>${esc(c.text)}</pre>
+        ${c.flagged ? `<div class="flag">⚠ Possible health-outcome claim ("${esc(c.flagMatch)}") — rephrase before posting.</div>` : ''}</div>`;
+    }).join('');
+    return `<div class="section-title">${a.label}</div>${langBlocks}`;
+  }).join('');
 
-  state.syncing = true; render();
-  try {
-    const colA = await sheetsFetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(state.sheetId)}/values/${SHEET_TAB}!A:A`
-    );
-    const startRow = findFirstEmptyRow(colA.values || [[]]);
-    const writes = buildSyncWrites(toSync, startRow);
+  const toc = generateTOC(product, 'question', 'bm', state.genDuration);
+  const tocText = toc.scenes.map((s, i) => `Scene ${i + 1}: ${s}`).join('\n');
 
-    const data = [];
-    writes.forEach(w => { data.push(w.ab); data.push(w.de); });
-    await sheetsFetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(state.sheetId)}/values:batchUpdate`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data }) }
-    );
+  return `
+    <div class="field">
+      <label>Product</label>
+      <select data-action="gen-product">
+        ${state.products.map(p => `<option value="${p.id}" ${p.id === product.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="section-title">Captions — 3 angles × 3 languages</div>
+    ${captionBlocks}
 
-    writes.forEach(w => state.syncedIds.add(w.transactionId));
-    saveSyncedIds([...state.syncedIds]);
-    state.lastSyncMsg = `Synced ${writes.length} transaction(s) just now.`;
-    toast(state.lastSyncMsg);
-  } catch (e) {
-    state.lastSyncMsg = 'Sync failed: ' + e.message;
-    toast('Sync failed — see the Sync tab for details.');
-  } finally {
-    state.syncing = false; render();
-  }
+    <div class="section-title">TOC / on-screen script</div>
+    <div class="card">
+      <div class="row" style="align-items:flex-end">
+        <div class="field" style="flex:1;margin-bottom:0">
+          <label>Clip duration (seconds)</label>
+          <input type="number" data-action="gen-duration" value="${state.genDuration}">
+        </div>
+        <div style="font-size:12px;color:var(--muted);padding-bottom:10px">${toc.sceneCount} scenes</div>
+      </div>
+    </div>
+    <div class="gen-block">
+      <div class="lang-label">Question hook · BM Santai · paste-ready for CapCut</div>
+      <pre>${esc(tocText)}</pre>
+      ${toc.flagged ? `<div class="flag">⚠ Possible health-outcome claim — rephrase before posting.</div>` : ''}
+    </div>
+  `;
+}
+
+function renderTTPerformance() {
+  const today = todayISO();
+  const rows = [...state.perf].sort((a, b) => b.date.localeCompare(a.date)).map(e => {
+    const product = state.products.find(p => p.id === e.productId);
+    const settled = isSettled(e, today);
+    return `<tr>
+      <td>${esc(e.date)}${!settled ? ' <span class="pill muted">settling</span>' : ''}</td>
+      <td>${esc(product ? product.name : '—')}</td>
+      <td>${esc(e.hookType)}</td>
+      <td class="num">${e.views}</td>
+      <td class="num">${(engagementRate(e) * 100).toFixed(1)}%</td>
+    </tr>`;
+  }).join('');
+
+  const insights = state.products.map(p => {
+    const best = bestHookType(state.perf, p.id, today);
+    return best ? `<div class="list-item"><div class="name">${esc(p.name)}</div>
+      <div class="meta">Best hook so far: <b>${esc(best.hook)}</b> (${(best.avg * 100).toFixed(1)}% avg engagement, ${best.count} posts)</div></div>` : '';
+  }).filter(Boolean).join('');
+
+  return `
+    <div class="card">
+      <div class="card-title">Import CSV</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px">From TikTok Creator Center's analytics export (past 7 days). Re-importing updates existing rows instead of duplicating.</p>
+      <input type="file" id="perf-csv-file" accept=".csv,text/csv">
+      <button class="btn block" style="margin-top:8px" data-action="import-perf-csv">Import</button>
+    </div>
+    <div class="section-title">Best hook per product (3+ settled posts)</div>
+    ${insights || `<div class="empty">Not enough settled data yet.</div>`}
+    <div class="section-title">Log</div>
+    ${state.perf.length ? `<table><tr><th>Date</th><th>Product</th><th>Hook</th><th class="num">Views</th><th class="num">Eng.</th></tr>${rows}</table>` : `<div class="empty">No performance data yet.</div>`}
+  `;
+}
+
+function renderTTCompliance() {
+  const cs = complianceStatus(state.compliance);
+  return `
+    <div class="card ${cs.status === 'ok' ? 'good' : 'warn'}">
+      <div class="card-title">${cs.status === 'ok' ? '✅' : '⚠️'} Policy status</div>
+      <p style="font-size:13px;margin-bottom:8px">${state.compliance.lastChecked ? `Last checked ${esc(state.compliance.lastChecked)} (${cs.days} day${cs.days === 1 ? '' : 's'} ago)` : 'Never checked yet.'}</p>
+      <button class="btn small" data-action="mark-compliance-checked">Mark reviewed today</button>
+    </div>
+    <div class="section-title">The hard rule (enforcement: 14 Aug 2026)</div>
+    <div class="card">
+      <p style="font-size:12.5px;margin-bottom:8px"><b>Feature-based claims — OK:</b> "safe", "comfortable", "easier", "guard hand handle".</p>
+      <p style="font-size:12.5px;color:var(--bad)"><b>Health-outcome claims — never:</b> "solves fatigue", "reduces pain", "treats condition", specific timeframes like "in 2 weeks".</p>
+      <p style="font-size:11.5px;color:var(--muted);margin-top:8px">The Generate tab scans every caption and script for this pattern automatically and flags a match — it won't silently post it, but it also won't catch every phrasing, so read before posting.</p>
+    </div>
+  `;
 }
 
 /* ---------- toast ---------- */
@@ -714,109 +733,91 @@ function toast(msg) {
   el.textContent = msg;
   el.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2400);
 }
 
 /* ---------- actions ---------- */
-function doParseInput() {
-  const textarea = document.getElementById('capture-input');
-  const text = textarea.value.trim();
-  if (!text) return;
-  state.pending = parseInput(text, state.learned);
-  flagDuplicates(state.pending, state.transactions, todayISO());
+function doAddProduct() {
+  const name = document.getElementById('pf-name').value.trim();
+  const price = parseFloat(document.getElementById('pf-price').value) || 0;
+  const problem = document.getElementById('pf-problem').value.trim();
+  const benefit = document.getElementById('pf-benefit').value.trim();
+  const urgent = document.getElementById('pf-urgent').value === '1';
+  if (!name || !problem || !benefit) { toast('Fill in name, problem, and benefit.'); return; }
+  state.products.push(newProduct({ name, price, problem, benefit, urgent }));
+  safeSet(LS.products, state.products);
+  toast('Product added.');
   render();
 }
-
-function doRemovePending(i) {
-  state.pending.splice(i, 1);
+function doRemoveProduct(id) {
+  state.products = state.products.filter(p => p.id !== id);
+  safeSet(LS.products, state.products);
+  state.plan.slots.forEach(s => { if (s.productId === id) s.productId = null; });
+  safeSet(LS.plan, state.plan);
   render();
 }
-
-function doSavePending() {
-  const now = Date.now();
-  const today = todayISO();
-  const bad = state.pending.filter(p => !(p.amount > 0));
-  if (bad.length) { toast('Fix the amount on the highlighted line(s) first.'); return; }
-  state.pending.forEach((p, i) => {
-    state.transactions.push({
-      id: uid(), date: today, category: p.category, type: catInfo(p.category).type,
-      amount: p.amount, note: p.note, rawText: p.rawText, createdAt: now + i,
-    });
-  });
-  saveTransactions(state.transactions);
-  state.pending = [];
-  document.getElementById('capture-input').value = '';
-  toast('Saved.');
-  render();
-}
-
-function doCancelPending() { state.pending = []; render(); }
-
-function exportCSV() {
-  const header = ['Date', 'Category', 'Type', 'Amount (RM)', 'Notes', 'Month'];
-  const lines = [header.join(',')];
-  [...state.transactions].sort((a, b) => a.createdAt - b.createdAt).forEach(t => {
-    const row = [t.date, t.category, t.type, t.amount.toFixed(2), t.note, monthKey(t.date)]
-      .map(v => `"${String(v).replace(/"/g, '""')}"`);
-    lines.push(row.join(','));
-  });
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'personal-cfo-transactions.csv';
-  document.body.appendChild(a); a.click(); a.remove();
-  URL.revokeObjectURL(url);
-  toast('CSV downloaded — paste rows into your Google Sheet Transaction Log.');
+function doImportPerfCSV() {
+  const input = document.getElementById('perf-csv-file');
+  const file = input.files && input.files[0];
+  if (!file) { toast('Choose a CSV file first.'); return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const rows = parsePerfCSV(String(reader.result));
+    if (!rows.length) { toast('No rows found in that CSV.'); return; }
+    state.perf = mergePerfImport(state.perf, rows);
+    safeSet(LS.perf, state.perf);
+    toast(`Imported ${rows.length} row(s).`);
+    render();
+  };
+  reader.readAsText(file);
 }
 
 /* ---------- event delegation ---------- */
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-action]');
   if (!el) return;
-  const action = el.dataset.action;
-  if (action === 'switch-tab') { state.tab = el.dataset.tab; render(); }
-  else if (action === 'parse-input') doParseInput();
-  else if (action === 'save-pending') doSavePending();
-  else if (action === 'cancel-pending') doCancelPending();
-  else if (action === 'export-csv') exportCSV();
-  else if (action === 'remove-pending') doRemovePending(Number(el.dataset.index));
-  else if (action === 'google-signin') doGoogleSignIn();
-  else if (action === 'sync-now') doSyncNow();
-});
-
-document.addEventListener('input', (e) => {
-  const el = e.target.closest('[data-action]');
-  if (!el) return;
-  const action = el.dataset.action;
-  if (action === 'edit-pending-amount') {
-    const i = Number(el.dataset.index);
-    state.pending[i].amount = el.value === '' ? null : parseFloat(el.value);
-  } else if (action === 'edit-pending-note') {
-    state.pending[Number(el.dataset.index)].note = el.value;
-  } else if (action === 'edit-budget') {
-    state.budgets[el.dataset.category] = el.value === '' ? 0 : parseFloat(el.value);
-    saveBudgets(state.budgets);
-  } else if (action === 'edit-sheet-id') {
-    state.sheetId = el.value.trim();
-    saveSheetId(state.sheetId);
+  const a = el.dataset.action;
+  if (a === 'switch-tab') { state.tab = el.dataset.tab; render(); }
+  else if (a === 'tt-subtab') { state.ttSubtab = el.dataset.sub; render(); }
+  else if (a === 'add-product') doAddProduct();
+  else if (a === 'remove-product') doRemoveProduct(el.dataset.id);
+  else if (a === 'import-perf-csv') doImportPerfCSV();
+  else if (a === 'mark-compliance-checked') {
+    state.compliance = { lastChecked: todayISO() };
+    safeSet(LS.compliance, state.compliance);
+    toast('Marked reviewed.');
+    render();
   }
 });
 
 document.addEventListener('change', (e) => {
   const el = e.target.closest('[data-action]');
   if (!el) return;
-  if (el.dataset.action === 'edit-pending-category') {
-    const i = Number(el.dataset.index);
-    const p = state.pending[i];
-    p.category = el.value;
-    p.type = catInfo(el.value).type;
-    p.confidence = 1; // user-confirmed
-    // Manual correction teaches the categorizer for next time.
-    learnFromCorrection(p.rawText, el.value, state.learned);
-    saveLearned(state.learned);
-    render();
+  const a = el.dataset.action;
+  if (a === 'plan-product') {
+    state.plan.slots[Number(el.dataset.index)].productId = el.value || null;
+    safeSet(LS.plan, state.plan); render();
+  } else if (a === 'plan-angle') {
+    state.plan.slots[Number(el.dataset.index)].angleId = el.value || null;
+    safeSet(LS.plan, state.plan); render();
+  } else if (a === 'plan-repost') {
+    const slot = state.plan.slots[Number(el.dataset.index)];
+    slot.isRepost = el.checked;
+    if (!el.checked) slot.openingChanged = false;
+    safeSet(LS.plan, state.plan); render();
+  } else if (a === 'plan-opening') {
+    state.plan.slots[Number(el.dataset.index)].openingChanged = el.checked;
+    safeSet(LS.plan, state.plan); render();
+  } else if (a === 'gen-product') {
+    state.genProductId = el.value; render();
+  } else if (a === 'gen-duration') {
+    state.genDuration = Number(el.value) || 15; render();
   }
 });
+
+/* ---------- Telegram WebApp bridge ---------- */
+const tg = (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) || null;
+if (tg) { tg.ready(); tg.expand(); try { tg.setHeaderColor('#ffffff'); } catch (e) {} }
 
 /* ---------- boot ---------- */
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {

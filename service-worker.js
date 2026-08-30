@@ -1,5 +1,5 @@
-const CACHE_NAME = 'personal-cfo-v2';
-const PRECACHE = ['./', './index.html', './manifest.json', './telegram.html'];
+const CACHE_NAME = 'personal-manager-v1';
+const PRECACHE = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((c) => c.addAll(PRECACHE)));
